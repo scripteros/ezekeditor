@@ -1,0 +1,87 @@
+{
+  "name": "ezek-editor",
+  "version": "1.0.0",
+  "description": "Editor de código moderno inspirado no VS Code com suporte a IA",
+  "main": "./out/main/index.js",
+  "author": "Ezek",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "postinstall": "electron-builder install-app-deps",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@codebuff/sdk": "^0.10.7",
+    "@monaco-editor/react": "^4.6.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "chokidar": "^3.6.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.40.0",
+    "ioredis": "^5.10.1",
+    "ldapts": "^8.1.8",
+    "lucide-react": "^0.344.0",
+    "monaco-editor": "^0.45.0",
+    "mysql2": "^3.22.3",
+    "node-pty": "^1.0.0",
+    "oracledb": "^6.10.0",
+    "pg": "^8.21.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.1",
+    "remark-gfm": "^4.0.1",
+    "simple-git": "^3.24.0",
+    "tailwind-merge": "^3.6.0",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0",
+    "xterm-addon-search": "^0.13.0",
+    "xterm-addon-web-links": "^0.9.0",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.17",
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.0",
+    "electron-vite": "^2.0.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.4.0",
+    "vite": "^5.1.0"
+  },
+  "build": {
+    "appId": "com.nova.editor",
+    "productName": "Ezek",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "!node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "ico.png"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "ico.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "ico.png"
+    }
+  }
+}

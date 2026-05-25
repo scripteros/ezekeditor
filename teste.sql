@@ -1,0 +1,1 @@
+select * from tasy.pessoa_fisica@tasyprod

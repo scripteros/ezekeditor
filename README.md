@@ -1,3 +1,6 @@
+<img width="1536" height="1024" alt="logo" src="https://github.com/user-attachments/assets/ebb302f2-95c2-41a5-9ece-d6888f184877" />
+
+
 # Ezek Editor
 
 Um editor de código moderno, rápido e poderoso, inspirado no VS Code e construído com Electron, focado em produtividade e com suporte integrado à Inteligência Artificial.

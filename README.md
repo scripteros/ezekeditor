@@ -23,7 +23,7 @@ Um editor de código moderno, rápido e poderoso, inspirado no VS Code e constru
 - **Editor:** Monaco Editor
 - **Terminal:** XTerm.js
 - **Estado:** Zustand
-- **Segurança/Proxy:** Hono, Playwright, KimiProxy & DeepsProxy
+- **Segurança/Proxy:** Hono, Playwright
 
 ## 📖 Como Usar o Ezek Editor
 

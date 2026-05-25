@@ -3,6 +3,7 @@ import Editor, { OnMount, OnChange, loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { useEditorStore } from '../../store/editorStore'
 import { useThemeStore } from '../../store/themeStore'
+import logo from '../../assets/logo.png'
 
 loader.config({ monaco })
 
@@ -33,7 +34,7 @@ export default function MonacoEditor() {
         { token: 'predefined', foreground: 'DCDCAA' },
       ],
       colors: {
-        'editor.background': '#0f1a12',
+        'editor.background': '#00000000',
         'editor.foreground': '#d4e6d4',
         'editor.lineHighlightBackground': '#1a2d1f',
         'editor.selectionBackground': '#1a3a2f',
@@ -51,7 +52,7 @@ export default function MonacoEditor() {
         'editorHoverWidget.border': '#2a3d2f',
         'editorWhitespace.foreground': '#1a2d1f',
         'editorRuler.foreground': '#1a2d1f',
-        'minimap.background': '#0f1a12',
+        'minimap.background': '#00000000',
       },
     })
 
@@ -70,7 +71,7 @@ export default function MonacoEditor() {
         { token: 'operator', foreground: '000000' },
       ],
       colors: {
-        'editor.background': '#ffffff',
+        'editor.background': '#00000000',
         'editor.foreground': '#1a2d1f',
         'editor.lineHighlightBackground': '#e8f0e8',
         'editor.selectionBackground': '#d0f0d0',
@@ -88,7 +89,7 @@ export default function MonacoEditor() {
         'editorHoverWidget.border': '#d0e0d0',
         'editorWhitespace.foreground': '#e8f0e8',
         'editorRuler.foreground': '#e8f0e8',
-        'minimap.background': '#ffffff',
+        'minimap.background': '#00000000',
       },
     })
 
@@ -115,7 +116,7 @@ export default function MonacoEditor() {
   }
 
   return (
-    <div className="h-full w-full" onContextMenu={(e) => e.preventDefault()}>
+    <div className={`h-full w-full relative ${isDark ? 'bg-[#0f1a12]' : 'bg-[#ffffff]'}`} onContextMenu={(e) => e.preventDefault()}>
       <Editor
         key={`${activeFile.id}-${isDark ? 'dark' : 'light'}`}
         height="100%"
@@ -200,6 +201,11 @@ export default function MonacoEditor() {
           acceptSuggestionOnEnter: 'smart',
         }}
       />
+      
+      {/* Watermark Logo */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.03] grayscale">
+        <img src={logo} alt="Watermark" className="w-96 h-96 object-contain" />
+      </div>
     </div>
   )
 }

@@ -70,6 +70,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const existing = get().openFiles.find(f => f.filePath === filePath)
     if (existing) {
       set({ activeFileId: existing.id })
+      window.dispatchEvent(new CustomEvent('ezek:close-sql-workspace'))
       return
     }
 
@@ -103,6 +104,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         fileContents: { ...state.fileContents, [id]: content },
         isLoadingFile: false,
       }))
+      window.dispatchEvent(new CustomEvent('ezek:close-sql-workspace'))
     } catch (err) {
       set({ isLoadingFile: false })
       console.error('Error opening file:', err)

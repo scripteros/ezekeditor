@@ -22,10 +22,16 @@ export default function TerminalComponent({ terminalId }: Props) {
     const api = getApi()
     if (!api) return
 
+    const readTerminalSettings = () => ({
+      cursorBlink: localStorage.getItem('ezek-settings-terminal-cursor-blink') !== 'false',
+      fontSize: Number(localStorage.getItem('ezek-settings-terminal-font-size') || '13'),
+    })
+    const terminalSettings = readTerminalSettings()
+
     const term = new XTerm({
-      cursorBlink: true,
+      cursorBlink: terminalSettings.cursorBlink,
       cursorStyle: 'block',
-      fontSize: 14,
+      fontSize: terminalSettings.fontSize,
       fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
       theme: {
         background: '#0f1a12',
@@ -121,12 +127,22 @@ export default function TerminalComponent({ terminalId }: Props) {
       terminalRef.current.addEventListener('contextmenu', handleContextMenu)
     }
 
+    const handleSettingsChanged = () => {
+      const nextSettings = readTerminalSettings()
+      term.options.cursorBlink = nextSettings.cursorBlink
+      term.options.fontSize = nextSettings.fontSize
+      setTimeout(() => fitAddon.fit(), 0)
+    }
+
+    window.addEventListener('ezek-settings-changed', handleSettingsChanged)
+
     xtermRef.current = term
 
     return () => {
       cleanupData()
       cleanupExit()
       resizeObserver.disconnect()
+      window.removeEventListener('ezek-settings-changed', handleSettingsChanged)
       if (terminalRef.current) {
         terminalRef.current.removeEventListener('contextmenu', handleContextMenu)
       }

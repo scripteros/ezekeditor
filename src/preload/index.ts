@@ -75,8 +75,8 @@ const api = {
   gitRemoteRemove: (repoPath: string, name: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.GIT_REMOTE_REMOVE, repoPath, name) as Promise<void>,
 
-  createTerminal: (shell?: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.CREATE_TERMINAL, shell) as Promise<string>,
+  createTerminal: (shell?: string, cwd?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CREATE_TERMINAL, shell, cwd) as Promise<string>,
 
   writeToTerminal: (terminalId: string, data: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.WRITE_TERMINAL, terminalId, data) as Promise<void>,
@@ -108,6 +108,9 @@ const api = {
 
   aiTestConnection: (config: any) =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_TEST_CONNECTION, config) as Promise<{ ok: boolean; error?: string }>,
+
+  aiListModels: (baseUrl?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_LIST_MODELS, baseUrl) as Promise<string[]>,
 
   aiExecuteCommand: (command: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_EXECUTE_COMMAND, command) as Promise<{ stdout: string; stderr: string }>,
@@ -148,10 +151,22 @@ const api = {
   aiInstallKimiProxy: () =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_INSTALL_KIMIPROXY) as Promise<boolean>,
 
-  aiStartProxy: (proxyType: 'deepsproxy' | 'kimiproxy') =>
+  aiListGeminiProxyModels: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_LIST_GEMINIPROXY_MODELS) as Promise<any[]>,
+
+  aiCheckGeminiProxyInstalled: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_CHECK_GEMINIPROXY) as Promise<{ installed: boolean, path: string }>,
+
+  aiInstallGeminiProxy: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_INSTALL_GEMINIPROXY) as Promise<boolean>,
+
+  aiUninstallProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_UNINSTALL_PROXY, proxyType) as Promise<boolean>,
+
+  aiStartProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_START_PROXY, proxyType) as Promise<boolean>,
 
-  aiStopProxy: (proxyType: 'deepsproxy' | 'kimiproxy') =>
+  aiStopProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') =>
     ipcRenderer.invoke(IPC_CHANNELS.AI_STOP_PROXY, proxyType) as Promise<boolean>,
 
   osShowItemInFolder: (path: string) =>
@@ -204,6 +219,9 @@ const api = {
 
   sqlTestConnection: (config: any) =>
     ipcRenderer.invoke(IPC_CHANNELS.SQL_TEST_CONNECTION, config) as Promise<{ success: boolean; error?: string }>,
+
+  sqlTestRedisConnection: (config: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SQL_TEST_REDIS_CONNECTION, config) as Promise<{ success: boolean; error?: string }>,
 
   sqlExecuteQuery: (config: any, query: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.SQL_EXECUTE_QUERY, config, query) as Promise<any>,

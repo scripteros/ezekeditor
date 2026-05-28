@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DiffEditor, OnMount, loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { useEditorStore } from '../../store/editorStore'
@@ -10,7 +10,19 @@ loader.config({ monaco })
 export default function MonacoDiffEditor() {
   const { isDiffMode, diffOriginalContent, diffModifiedContent, diffFilePath, acceptDiff, closeDiff } = useEditorStore()
   const { theme } = useThemeStore()
-  const isDark = theme.type === 'dark'
+  const [settingsVersion, setSettingsVersion] = useState(0)
+  const codeEditorTheme = useMemo(() => (
+    localStorage.getItem('ezek-settings-code-editor-theme') || 'auto'
+  ), [settingsVersion])
+  const isDark = codeEditorTheme === 'auto'
+    ? theme.type === 'dark'
+    : codeEditorTheme === 'dark'
+
+  useEffect(() => {
+    const handleSettingsChanged = () => setSettingsVersion(version => version + 1)
+    window.addEventListener('ezek-settings-changed', handleSettingsChanged)
+    return () => window.removeEventListener('ezek-settings-changed', handleSettingsChanged)
+  }, [])
 
   // Extract filename
   const fileName = diffFilePath.split(/[/\\]/).pop() || 'Arquivo'
@@ -116,7 +128,7 @@ export default function MonacoDiffEditor() {
   if (!isDiffMode) return null
 
   return (
-    <div className="flex flex-col h-full w-full bg-nova-bg">
+    <div className={`flex flex-col h-full w-full ${isDark ? 'bg-nova-bg' : 'bg-slate-50'}`}>
       <div className="flex items-center justify-between px-4 py-2 border-b border-nova-border bg-nova-bg-secondary">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-nova-text">Revisão de Código</span>
@@ -153,6 +165,13 @@ export default function MonacoDiffEditor() {
             fontSize: 14,
             fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
             wordWrap: 'on',
+            guides: {
+              indentation: true,
+              highlightActiveIndentation: true,
+              bracketPairs: true,
+              bracketPairsHorizontal: true,
+            },
+            bracketPairColorization: { enabled: true },
             readOnly: false, // The modified side should be editable if true but DiffEditor behaves special.
             originalEditable: false,
             scrollbar: {

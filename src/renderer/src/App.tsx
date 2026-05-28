@@ -16,8 +16,9 @@ import { useAIStore } from './store/aiStore'
 export default function App() {
   const { theme } = useThemeStore()
   const { togglePalette } = useCommandPaletteStore()
-  const { isOpen: isSidebarOpen, width: sidebarWidth, setWidth: setSidebarWidth } = useSidebarStore()
+  const { isOpen: isSidebarOpen, activeView, setWidth: setSidebarWidth } = useSidebarStore()
   const { isPanelOpen, panelWidth, setPanelWidth } = useAIStore()
+  const shouldShowSidebar = isSidebarOpen && activeView !== 'extensions'
 
   useEffect(() => {
     document.documentElement.className = theme.type
@@ -30,7 +31,7 @@ export default function App() {
   useEffect(() => {
     const api = (window as any).api
     if (api && api.onProxyStatusChange) {
-      return api.onProxyStatusChange((proxyType: 'deepsproxy' | 'kimiproxy', status: 'online' | 'offline' | 'error') => {
+      return api.onProxyStatusChange((proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy', status: 'online' | 'offline' | 'error') => {
         useAIStore.getState().setProxyStatus(proxyType, status)
       })
     }
@@ -48,12 +49,12 @@ export default function App() {
   }, [togglePalette])
 
   return (
-    <div className="h-screen flex flex-col bg-nova-bg text-nova-text select-none">
+    <div className="h-screen flex flex-col bg-nova-bg text-nova-text select-none app-shell">
       <TitleBar />
       <div className="flex flex-1 overflow-hidden">
         <ActivityBar />
-        <Sidebar />
-        {isSidebarOpen && (
+        {shouldShowSidebar && <Sidebar />}
+        {shouldShowSidebar && (
           <HorizontalResizer onResize={(delta) => {
             const currentWidth = useSidebarStore.getState().width;
             setSidebarWidth(currentWidth + delta);

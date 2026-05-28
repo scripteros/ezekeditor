@@ -19,10 +19,21 @@ export default function BottomPanel() {
     const handleOpenSqlTab = () => {
       setActiveTab('sql')
       setIsVisible(true)
+      setPanelHeight(height => Math.max(height, 420))
+      window.dispatchEvent(new CustomEvent('ezek:open-sql-workspace'))
     }
     window.addEventListener('ezek:open-sql-tab', handleOpenSqlTab)
     return () => window.removeEventListener('ezek:open-sql-tab', handleOpenSqlTab)
   }, [])
+
+  const openTab = (tab: 'terminal' | 'logs' | 'sql' | 'security') => {
+    setActiveTab(tab)
+    setIsVisible(true)
+    if (tab === 'sql') {
+      setPanelHeight(height => Math.max(height, 420))
+      window.dispatchEvent(new CustomEvent('ezek:open-sql-workspace'))
+    }
+  }
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -31,7 +42,7 @@ export default function BottomPanel() {
 
     const onMouseMove = (e: MouseEvent) => {
       const diff = startY - e.clientY
-      setPanelHeight(Math.max(100, Math.min(600, startHeight + diff)))
+      setPanelHeight(Math.max(60, Math.min(window.innerHeight - 40, startHeight + diff)))
     }
 
     const onMouseUp = () => {
@@ -47,28 +58,28 @@ export default function BottomPanel() {
     return (
       <div className="border-t border-nova-border bg-nova-bg-secondary flex gap-2">
         <button
-          onClick={() => { setActiveTab('terminal'); setIsVisible(true) }}
+          onClick={() => openTab('terminal')}
           className="flex items-center gap-1 px-3 py-1 text-xs text-nova-text-secondary hover:text-nova-text"
         >
           <ChevronUp size={14} />
           Terminal
         </button>
         <button
-          onClick={() => { setActiveTab('logs'); setIsVisible(true) }}
+          onClick={() => openTab('logs')}
           className="flex items-center gap-1 px-3 py-1 text-xs text-nova-text-secondary hover:text-nova-text"
         >
           <ChevronUp size={14} />
           Logs {logs.length > 0 && <span className="text-nova-text-muted">({logs.length})</span>}
         </button>
         <button
-          onClick={() => { setActiveTab('sql'); setIsVisible(true) }}
+          onClick={() => openTab('sql')}
           className="flex items-center gap-1 px-3 py-1 text-xs text-nova-text-secondary hover:text-nova-text"
         >
           <ChevronUp size={14} />
           SQL
         </button>
         <button
-          onClick={() => { setActiveTab('security'); setIsVisible(true) }}
+          onClick={() => openTab('security')}
           className="flex items-center gap-1 px-3 py-1 text-xs text-nova-text-secondary hover:text-nova-text"
         >
           <ChevronUp size={14} />
@@ -90,20 +101,20 @@ export default function BottomPanel() {
       <div className="h-[35px] min-h-[35px] flex items-center justify-between px-4 bg-nova-bg-secondary border-b border-nova-border select-none">
         <div className="flex items-center gap-1 h-full py-1.5">
           <button
-            onClick={() => setActiveTab('terminal')}
+            onClick={() => openTab('terminal')}
             className={`flex items-center gap-1.5 h-full px-3 text-xs tracking-wide rounded-md transition-colors ${
               activeTab === 'terminal'
-                ? 'text-[#f3f4f6] bg-[#101916] border border-nova-accent/10'
+                ? 'text-nova-accent bg-nova-accent/10 border border-nova-accent/25'
                 : 'text-nova-text-secondary hover:text-nova-text'
             }`}
           >
             Terminal
           </button>
           <button
-            onClick={() => setActiveTab('logs')}
+            onClick={() => openTab('logs')}
             className={`flex items-center gap-1.5 h-full px-3 text-xs tracking-wide rounded-md transition-colors ${
               activeTab === 'logs'
-                ? 'text-[#f3f4f6] bg-[#101916] border border-nova-accent/10'
+                ? 'text-nova-accent bg-nova-accent/10 border border-nova-accent/25'
                 : 'text-nova-text-secondary hover:text-nova-text'
             }`}
           >
@@ -115,20 +126,20 @@ export default function BottomPanel() {
             )}
           </button>
           <button
-            onClick={() => setActiveTab('sql')}
+            onClick={() => openTab('sql')}
             className={`flex items-center gap-1.5 h-full px-3 text-xs tracking-wide rounded-md transition-colors ${
               activeTab === 'sql'
-                ? 'text-[#f3f4f6] bg-[#101916] border border-nova-accent/10'
+                ? 'text-nova-accent bg-nova-accent/10 border border-nova-accent/25'
                 : 'text-nova-text-secondary hover:text-nova-text'
             }`}
           >
             SQL
           </button>
           <button
-            onClick={() => setActiveTab('security')}
+            onClick={() => openTab('security')}
             className={`flex items-center gap-1.5 h-full px-3 text-xs tracking-wide rounded-md transition-colors ${
               activeTab === 'security'
-                ? 'text-[#f3f4f6] bg-[#101916] border border-nova-accent/10'
+                ? 'text-nova-accent bg-nova-accent/10 border border-nova-accent/25'
                 : 'text-nova-text-secondary hover:text-nova-text'
             }`}
           >

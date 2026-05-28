@@ -7,6 +7,7 @@ import oracledb from 'oracledb'
 import Redis from 'ioredis'
 
 let isOracleClientInitialized = false
+const REDIS_MEMORY_TTL_SECONDS = 60 * 60 * 24 * 7
 
 function initOracleClient(libDir?: string) {
   if (!libDir || isOracleClientInitialized) return
@@ -22,38 +23,111 @@ function initOracleClient(libDir?: string) {
   }
 }
 
-async function saveToRedisCache(config: DbConfig, query: string, columns: string[]) {
-  if (!config.redisUrl) return;
-  try {
-    const redis = new Redis(config.redisUrl, { 
+function createRedisClient(config: DbConfig) {
+  if (config.redisUrl) {
+    return new Redis(config.redisUrl, {
       lazyConnect: true,
       maxRetriesPerRequest: 0,
-      retryStrategy: () => null
-    });
-    redis.on('error', () => { /* ignore */ });
+      retryStrategy: () => null,
+    })
+  }
+
+  if (!config.redisEnabled && !config.redisHost) return null
+
+  return new Redis({
+    host: config.redisHost || 'localhost',
+    port: config.redisPort || 6379,
+    username: config.redisUsername || undefined,
+    password: config.redisPassword || undefined,
+    db: config.redisDatabase || 0,
+    tls: config.redisTls || config.redisMode === 'cloud' ? {} : undefined,
+    lazyConnect: true,
+    maxRetriesPerRequest: 0,
+    retryStrategy: () => null,
+  })
+}
+
+function getRedisMemoryKey(config: DbConfig) {
+  return `ezek:ai_memory:${config.id}`
+}
+
+function getLegacyRedisMemoryKey(config: DbConfig) {
+  return `ezek:sql_cache:${config.id}`
+}
+
+async function saveToRedisCache(config: DbConfig, query: string, columns: string[], columnTypes: Record<string, string>, rowCount: number) {
+  const redis = createRedisClient(config)
+  if (!redis) return
+  try {
+    redis.on('error', () => { /* ignore */ })
     
-    await redis.connect();
+    await redis.connect()
     
-    const key = `ezek:sql_cache:${config.id}`;
+    const key = getRedisMemoryKey(config)
     
     const cacheEntry = {
+      connectionId: config.id,
+      connectionName: config.name,
+      provider: config.provider,
+      database: config.database,
       query,
       columns,
+      columnTypes,
+      rowCount,
       timestamp: Date.now()
-    };
+    }
     
-    await redis.lpush(key, JSON.stringify(cacheEntry));
-    // Keep only last 50 queries to prevent bloat
-    await redis.ltrim(key, 0, 49);
-    // Expire in 1 week (604800 seconds)
-    await redis.expire(key, 604800);
-    redis.disconnect();
+    await redis.lpush(key, JSON.stringify(cacheEntry))
+    await redis.ltrim(key, 0, 99)
+    await redis.expire(key, REDIS_MEMORY_TTL_SECONDS)
+    redis.disconnect()
   } catch (err) {
-    console.error('Failed to save to Redis cache:', err);
+    console.error('Failed to save to Redis cache:', err)
   }
 }
 
 const activeConnections = new Map<string, any>()
+
+const POSTGRES_TYPE_NAMES: Record<number, string> = {
+  16: 'bool',
+  17: 'bytea',
+  20: 'int8',
+  21: 'int2',
+  23: 'int4',
+  25: 'text',
+  700: 'float4',
+  701: 'float8',
+  1043: 'varchar',
+  1082: 'date',
+  1083: 'time',
+  1114: 'timestamp',
+  1184: 'timestamptz',
+  1700: 'numeric',
+  2950: 'uuid',
+  3802: 'jsonb',
+  114: 'json',
+}
+
+function mapPostgresColumnTypes(fields?: any[]) {
+  return Object.fromEntries((fields || []).map(field => [
+    field.name,
+    POSTGRES_TYPE_NAMES[field.dataTypeID] || `oid:${field.dataTypeID}`
+  ]))
+}
+
+function mapMySqlColumnTypes(fields?: any[]) {
+  return Object.fromEntries((fields || []).map(field => [
+    field.name,
+    field.columnTypeName || field.typeName || field.type || `type:${field.columnType}`
+  ]))
+}
+
+function mapOracleColumnTypes(metaData?: any[]) {
+  return Object.fromEntries((metaData || []).map(field => [
+    field.name,
+    field.dbTypeName || field.fetchTypeName || field.dbType || 'unknown'
+  ]))
+}
 
 export function registerSqlHandlers() {
   ipcMain.handle(IPC_CHANNELS.SQL_CANCEL_QUERY, async (_event, config: DbConfig) => {
@@ -80,26 +154,44 @@ export function registerSqlHandlers() {
   })
 
   ipcMain.handle(IPC_CHANNELS.SQL_GET_CACHE, async (_event, config: DbConfig) => {
-    if (!config || !config.redisUrl) return [];
+    if (!config) return []
+    const redis = createRedisClient(config)
+    if (!redis) return []
     try {
-      const redis = new Redis(config.redisUrl, { 
-        lazyConnect: true,
-        maxRetriesPerRequest: 0,
-        retryStrategy: () => null 
-      });
-      redis.on('error', () => { /* ignore */ });
+      redis.on('error', () => { /* ignore */ })
       
-      await redis.connect();
+      await redis.connect()
       
-      const key = `ezek:sql_cache:${config.id}`;
-      const data = await redis.lrange(key, 0, -1);
-      redis.disconnect();
-      return data.map(d => JSON.parse(d));
+      const key = getRedisMemoryKey(config)
+      const legacyKey = getLegacyRedisMemoryKey(config)
+      await redis.expire(key, REDIS_MEMORY_TTL_SECONDS)
+      await redis.expire(legacyKey, REDIS_MEMORY_TTL_SECONDS)
+      const data = [
+        ...await redis.lrange(key, 0, 99),
+        ...await redis.lrange(legacyKey, 0, 99),
+      ].slice(0, 100)
+      redis.disconnect()
+      return data.map(d => JSON.parse(d))
     } catch (err) {
-      console.error('Failed to get Redis cache:', err);
-      return [];
+      console.error('Failed to get Redis cache:', err)
+      return []
     }
-  });
+  })
+
+  ipcMain.handle(IPC_CHANNELS.SQL_TEST_REDIS_CONNECTION, async (_event, config: DbConfig) => {
+    const redis = createRedisClient(config)
+    if (!redis) return { success: false, error: 'Configure o Redis por URL ou por host/porta.' }
+    try {
+      redis.on('error', () => { /* handled by connect/ping */ })
+      await redis.connect()
+      await redis.ping()
+      redis.disconnect()
+      return { success: true }
+    } catch (err: any) {
+      try { redis.disconnect() } catch {}
+      return { success: false, error: err.message || String(err) }
+    }
+  })
 
   ipcMain.handle(IPC_CHANNELS.SQL_TEST_CONNECTION, async (_event, config: DbConfig) => {
     try {
@@ -163,6 +255,7 @@ export function registerSqlHandlers() {
         
         let rows = []
         let columns: string[] = []
+        let columnTypes: Record<string, string> = {}
         let rowCount = 0
         
         if (Array.isArray(res)) {
@@ -170,21 +263,24 @@ export function registerSqlHandlers() {
           const lastRes = res[res.length - 1]
           rows = lastRes.rows
           columns = lastRes.fields.map(f => f.name)
+          columnTypes = mapPostgresColumnTypes(lastRes.fields)
           rowCount = lastRes.rowCount || 0
         } else {
           rows = res.rows
           columns = res.fields ? res.fields.map(f => f.name) : []
+          columnTypes = mapPostgresColumnTypes(res.fields)
           rowCount = res.rowCount || 0
         }
         
         const payload = {
           success: true,
           columns,
+          columnTypes,
           rows,
           rowCount,
           executionTimeMs: Date.now() - startTime
         };
-        saveToRedisCache(config, query, columns);
+        saveToRedisCache(config, query, columns, columnTypes, rowCount);
         return payload;
       } else if (config.provider === 'mysql') {
         const connection = await mysql.createConnection({
@@ -202,6 +298,7 @@ export function registerSqlHandlers() {
         
         let formattedRows: any[] = []
         let columns: string[] = []
+        let columnTypes: Record<string, string> = {}
         let rowCount = 0
         
         if (Array.isArray(rows)) {
@@ -211,10 +308,12 @@ export function registerSqlHandlers() {
             formattedRows = lastRowSet
             const lastFieldSet = (fields as any[])[(fields as any[]).length - 1]
             columns = lastFieldSet ? lastFieldSet.map((f: any) => f.name) : []
+            columnTypes = mapMySqlColumnTypes(lastFieldSet)
             rowCount = lastRowSet.length
           } else {
             formattedRows = rows
             columns = fields ? (fields as any[]).map(f => f.name) : []
+            columnTypes = mapMySqlColumnTypes(fields as any[])
             rowCount = rows.length
           }
         } else {
@@ -224,11 +323,12 @@ export function registerSqlHandlers() {
         const payload = {
           success: true,
           columns,
+          columnTypes,
           rows: formattedRows,
           rowCount,
           executionTimeMs: Date.now() - startTime
         };
-        saveToRedisCache(config, query, columns);
+        saveToRedisCache(config, query, columns, columnTypes, rowCount);
         return payload;
       } else if (config.provider === 'oracle') {
         if (config.oracleClientLib) {
@@ -250,22 +350,24 @@ export function registerSqlHandlers() {
 
         const result = await connection.execute(finalQuery, [], { 
           outFormat: oracledb.OUT_FORMAT_OBJECT,
-          maxRows: 100 
+          maxRows: 10000
         })
         await connection.close()
         activeConnections.delete(config.id)
         
         const columns = result.metaData ? result.metaData.map(m => m.name) : []
+        const columnTypes = mapOracleColumnTypes(result.metaData)
         const rows = result.rows || []
         
         const payload = {
           success: true,
           columns,
+          columnTypes,
           rows,
           rowCount: result.rowsAffected || rows.length,
           executionTimeMs: Date.now() - startTime
         };
-        saveToRedisCache(config, query, columns);
+        saveToRedisCache(config, query, columns, columnTypes, rows.length);
         return payload;
       }
       return { success: false, error: 'Provedor não suportado' }

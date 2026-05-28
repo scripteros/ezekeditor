@@ -1,6 +1,6 @@
 import { useEditorStore } from '../../store/editorStore'
 import { useExplorerStore } from '../../store/explorerStore'
-import { X, FolderOpen, Loader2, Play } from 'lucide-react'
+import { X, FolderOpen, Loader2, Play, Database } from 'lucide-react'
 import MonacoEditor from '../editor/MonacoEditor'
 import MonacoDiffEditor from '../editor/MonacoDiffEditor'
 import ImageViewer from '../editor/ImageViewer'
@@ -8,12 +8,18 @@ import { useEffect, useRef, useState } from 'react'
 import { getApi } from '../../utils/platform'
 import logo from '../../assets/logo.png'
 import { useSqlStore } from '../../store/sqlStore'
+import MarketplaceCatalog from '../extensions/MarketplaceCatalog'
+import { useSidebarStore } from '../../store/sidebarStore'
+import SettingsView from '../settings/SettingsView'
+import SqlEditorWorkspace from '../sql/SqlEditorWorkspace'
 
 export default function EditorPanel() {
   const { openFiles, activeFileId, setActiveFile, closeFile, isLoadingFile, isDiffMode } = useEditorStore()
   const { setRootPath } = useExplorerStore()
   const { executeQuery, activeConnectionId, isExecuting } = useSqlStore()
+  const { activeView } = useSidebarStore()
   const tabsRef = useRef<HTMLDivElement>(null)
+  const [showSqlWorkspace, setShowSqlWorkspace] = useState(false)
   
   const activeFile = openFiles.find(f => f.id === activeFileId)
   
@@ -47,6 +53,17 @@ export default function EditorPanel() {
   }
 
   useEffect(() => {
+    const handleOpenSqlWorkspace = () => setShowSqlWorkspace(true)
+    const handleCloseSqlWorkspace = () => setShowSqlWorkspace(false)
+    window.addEventListener('ezek:open-sql-workspace', handleOpenSqlWorkspace)
+    window.addEventListener('ezek:close-sql-workspace', handleCloseSqlWorkspace)
+    return () => {
+      window.removeEventListener('ezek:open-sql-workspace', handleOpenSqlWorkspace)
+      window.removeEventListener('ezek:close-sql-workspace', handleCloseSqlWorkspace)
+    }
+  }, [])
+
+  useEffect(() => {
     const handleSave = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
@@ -63,6 +80,18 @@ export default function EditorPanel() {
     window.addEventListener('keydown', handleSave)
     return () => window.removeEventListener('keydown', handleSave)
   }, [activeFileId, activeFile, handleRunQuery])
+
+  if (activeView === 'extensions') {
+    return <MarketplaceCatalog />
+  }
+
+  if (activeView === 'settings') {
+    return <SettingsView />
+  }
+
+  if (showSqlWorkspace) {
+    return <SqlEditorWorkspace />
+  }
 
   if (openFiles.length === 0) {
     return (
@@ -125,8 +154,17 @@ export default function EditorPanel() {
             </button>
           </div>
         ))}
-        {activeFile && activeFile.language === 'sql' && (
-          <div className="ml-auto flex items-center pr-4">
+        <div className="ml-auto flex items-center gap-2 pr-4">
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('ezek:open-sql-workspace'))}
+            className="flex items-center gap-1.5 px-3 py-1 bg-nova-bg-tertiary text-nova-text-secondary rounded border border-nova-border hover:bg-nova-hover hover:text-nova-accent transition-colors text-xs font-medium"
+            title="Alternar para folhas SQL"
+          >
+            <Database size={12} />
+            SQL
+          </button>
+          {activeFile && activeFile.language === 'sql' && (
+            <>
             {isExecuting ? (
               <button
                 onClick={() => useSqlStore.getState().cancelQuery()}
@@ -142,8 +180,9 @@ export default function EditorPanel() {
                 <Play size={12} fill="currentColor" /> Executar (Ctrl+Enter)
               </button>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-hidden relative">
         {/* Watermark Overlay */}

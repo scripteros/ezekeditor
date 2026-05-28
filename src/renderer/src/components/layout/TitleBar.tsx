@@ -59,7 +59,7 @@ export default function TitleBar() {
   // Versão para navegador (sem Electron)
   if (!api) {
     return (
-      <div className="h-[30px] bg-emerald-900 flex items-center select-none border-b border-emerald-800">
+      <div className="h-[30px] bg-nova-titlebar flex items-center select-none border-b border-nova-border">
         {/* Logo pequena */}
         <div className="flex items-center px-3">
           <img 
@@ -84,8 +84,8 @@ export default function TitleBar() {
               onMouseLeave={() => setActiveMenu(null)}
               className={`px-3 py-1 text-[13px] font-normal transition-all duration-200 ${
                 activeMenu === item.id 
-                  ? 'bg-emerald-600/20 text-emerald-400' 
-                  : 'text-[#cccccc]/70 hover:bg-emerald-600/10 hover:text-emerald-400'
+                  ? 'bg-nova-accent/15 text-nova-accent' 
+                  : 'text-nova-text-secondary hover:bg-nova-hover hover:text-nova-accent'
               }`}
             >
               {item.label}
@@ -104,37 +104,37 @@ export default function TitleBar() {
         <div className="flex items-center">
           <button
             title="Dividir Editor"
-            className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+            className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
           >
             <SplitSquareHorizontal size={13} />
           </button>
           <button
             title="Pesquisar"
-            className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+            className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
           >
             <Search size={13} />
           </button>
           <button
             title="Configurações"
-            className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+            className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
           >
             <Settings size={13} />
           </button>
           <button
             title="Perfil"
-            className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+            className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
           >
             <User size={13} />
           </button>
           
           {/* Separador */}
-          <div className="w-px h-4 bg-[#2b2b2b] mx-1" />
+          <div className="w-px h-4 bg-nova-border mx-1" />
           
           {/* Controles da janela (simulados) */}
-          <button className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200">
+          <button className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200">
             <Minus size={12} />
           </button>
-          <button className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200">
+          <button className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200">
             <Square size={10} />
           </button>
           <button className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-white hover:bg-[#e74c3c] transition-all duration-200">
@@ -148,7 +148,7 @@ export default function TitleBar() {
   // Versão Electron com funcionalidades completas
   return (
     <div 
-      className="h-[30px] bg-emerald-900 flex items-center select-none border-b border-emerald-800" 
+      className="h-[30px] bg-nova-titlebar flex items-center select-none border-b border-nova-border" 
       style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
     >
       {/* Logo pequena */}
@@ -181,8 +181,8 @@ export default function TitleBar() {
                 onClick={() => isFileMenu ? setActiveMenu(activeMenu === item.id ? null : item.id) : undefined}
                 className={`px-3 py-1 text-[13px] font-normal transition-all duration-200 ${
                 activeMenu === item.id 
-                  ? 'bg-emerald-600/20 text-emerald-400' 
-                  : 'text-[#cccccc]/70 hover:bg-emerald-600/10 hover:text-emerald-400'
+                  ? 'bg-nova-accent/15 text-nova-accent' 
+                  : 'text-nova-text-secondary hover:bg-nova-hover hover:text-nova-accent'
                 }`}
               >
                 {item.label}
@@ -190,13 +190,13 @@ export default function TitleBar() {
               
               {/* Dropdown apenas para File menu */}
               {isFileMenu && activeMenu === item.id && (
-                <div className="absolute top-full left-0 bg-[#252526] border border-[#3c3c3c] shadow-xl z-50 min-w-[200px] py-1 rounded-sm">
+                  <div className="absolute top-full left-0 bg-nova-bg-secondary border border-nova-border shadow-xl z-50 min-w-[200px] py-1 rounded-sm">
                   <button 
                     onClick={() => {
                       api.openFileDialog?.();
                       setActiveMenu(null);
                     }}
-                    className="w-full px-3 py-2 text-left text-[13px] text-[#cccccc]/90 hover:text-[#cccccc] hover:bg-[#2d2d30] flex items-center gap-3"
+                    className="w-full px-3 py-2 text-left text-[13px] text-nova-text-secondary hover:text-nova-text hover:bg-nova-hover flex items-center gap-3"
                   >
                     <File size={14} /> Novo Arquivo
                   </button>
@@ -205,17 +205,17 @@ export default function TitleBar() {
                       api.openFolderDialog?.();
                       setActiveMenu(null);
                     }}
-                    className="w-full px-3 py-2 text-left text-[13px] text-[#cccccc]/90 hover:text-[#cccccc] hover:bg-[#2d2d30] flex items-center gap-3"
+                    className="w-full px-3 py-2 text-left text-[13px] text-nova-text-secondary hover:text-nova-text hover:bg-nova-hover flex items-center gap-3"
                   >
                     <FolderOpen size={14} /> Abrir Pasta
                   </button>
-                  <div className="border-t border-[#3c3c3c] my-1" />
+                  <div className="border-t border-nova-border my-1" />
                   <button 
                     onClick={() => {
                       api.saveFile?.();
                       setActiveMenu(null);
                     }}
-                    className="w-full px-3 py-2 text-left text-[13px] text-[#cccccc]/90 hover:text-[#cccccc] hover:bg-[#2d2d30] flex items-center gap-3"
+                    className="w-full px-3 py-2 text-left text-[13px] text-nova-text-secondary hover:text-nova-text hover:bg-nova-hover flex items-center gap-3"
                   >
                     <Save size={14} /> Salvar
                   </button>
@@ -223,7 +223,7 @@ export default function TitleBar() {
                     onClick={() => {
                       useEditorStore.getState().toggleAutoSave();
                     }}
-                    className="w-full px-3 py-2 text-left text-[13px] text-[#cccccc]/90 hover:text-[#cccccc] hover:bg-[#2d2d30] flex items-center justify-between"
+                    className="w-full px-3 py-2 text-left text-[13px] text-nova-text-secondary hover:text-nova-text hover:bg-nova-hover flex items-center justify-between"
                   >
                     <span className="flex items-center gap-3"><Save size={14} /> Auto-Salvar</span>
                     {useEditorStore.getState().autoSave && <div className="w-2 h-2 rounded-full bg-emerald-500"></div>}
@@ -237,7 +237,7 @@ export default function TitleBar() {
       
       {/* Centro - Nome do arquivo ativo */}
       <div className="flex-1 flex justify-center items-center px-4">
-        <span className="text-[13px] text-[#cccccc] font-medium tracking-wide">
+        <span className="text-[13px] text-nova-text-secondary font-medium tracking-wide">
           {displayTitle}
         </span>
       </div>
@@ -246,45 +246,45 @@ export default function TitleBar() {
       <div className="flex items-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         <button
           title="Dividir Editor"
-          className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+          className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
         >
           <SplitSquareHorizontal size={13} />
         </button>
         <button
           title="Pesquisar"
-          className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+          className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
         >
           <Search size={13} />
         </button>
         <button
           onClick={() => setActiveMenu('settings')}
           title="Configurações"
-          className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+          className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
         >
           <Settings size={13} />
         </button>
         <button
           title="Perfil"
-          className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+          className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
         >
           <User size={13} />
         </button>
         
         {/* Separador */}
-        <div className="w-px h-4 bg-[#2b2b2b] mx-1" />
+        <div className="w-px h-4 bg-nova-border mx-1" />
         
         {/* Controles da janela */}
         <button 
           onClick={() => api.minimizeWindow()} 
           title="Minimizar"
-          className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+          className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
         >
           <Minus size={12} />
         </button>
         <button 
           onClick={() => api.maximizeWindow().then(() => api.isMaximized().then(setIsMaximized))} 
           title={isMaximized ? 'Restaurar' : 'Maximizar'}
-          className="w-8 h-[30px] flex items-center justify-center text-[#cccccc]/70 hover:text-emerald-400 hover:bg-emerald-600/10 transition-all duration-200"
+          className="w-8 h-[30px] flex items-center justify-center text-nova-text-secondary hover:text-nova-accent hover:bg-nova-hover transition-all duration-200"
         >
           <Square size={10} />
         </button>

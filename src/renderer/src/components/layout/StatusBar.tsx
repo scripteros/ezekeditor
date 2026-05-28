@@ -10,7 +10,7 @@ export default function StatusBar() {
   const { getActiveFile } = useEditorStore()
   const { status, refreshStatus, isGitRepo } = useGitStore()
   const { rootPath } = useExplorerStore()
-  const { deepsProxyStatus, kimiProxyStatus } = useAIStore()
+  const { deepsProxyStatus, kimiProxyStatus, geminiProxyStatus } = useAIStore()
   const activeFile = getActiveFile()
   const api = getApi()
 
@@ -23,7 +23,7 @@ export default function StatusBar() {
   }, [rootPath, refreshStatus])
 
   return (
-    <div className="h-statusbar bg-orange-600 flex items-center justify-between px-3 text-status text-white select-none">
+    <div className="h-statusbar bg-nova-statusbar flex items-center justify-between px-3 text-status text-nova-statusbar-text select-none font-medium">
       <div className="flex items-center gap-4">
         {isGitRepo && status && (
           <div className="flex items-center gap-1">
@@ -35,7 +35,7 @@ export default function StatusBar() {
           <span className="opacity-80">{status.changes.length} alterações</span>
         )}
         {!api && <span className="opacity-80">Modo Navegador</span>}
-        <div className="flex items-center gap-3 border-l border-white/20 pl-4 ml-2">
+        <div className="flex items-center gap-3 border-l border-nova-statusbar-text/25 pl-4 ml-2">
           {deepsProxyStatus === 'online' && (
             <span className="flex items-center gap-1" title="DeepsProxy Online">
               <span className="w-2 h-2 rounded-full bg-green-400"></span> DeepsProxy
@@ -44,6 +44,11 @@ export default function StatusBar() {
           {kimiProxyStatus === 'online' && (
             <span className="flex items-center gap-1" title="KimiProxy Online">
               <span className="w-2 h-2 rounded-full bg-green-400"></span> KimiProxy
+            </span>
+          )}
+          {geminiProxyStatus === 'online' && (
+            <span className="flex items-center gap-1" title="GeminiProxy Online">
+              <span className="w-2 h-2 rounded-full bg-green-400"></span> GeminiProxy
             </span>
           )}
         </div>

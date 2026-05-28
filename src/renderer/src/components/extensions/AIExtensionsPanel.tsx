@@ -1,78 +1,113 @@
 import React, { useEffect, useState } from 'react'
 import { useExtensionsStore } from '../../store/extensionsStore'
-import { Puzzle, ArrowLeft, RefreshCw, X, Home } from 'lucide-react'
+import { useAIStore } from '../../store/aiStore'
+import { Home, RefreshCw, X } from 'lucide-react'
 
 export default function AIExtensionsPanel() {
-  const { installed, activeExtensionId, setActiveExtension } = useExtensionsStore()
+  const { installed: webExtensions, activeExtensionId, setActiveExtension } = useExtensionsStore()
   const [loading, setLoading] = useState(false)
 
-  const activeExt = installed.find(e => e.id === activeExtensionId)
+  const activeExt = webExtensions.find(e => e.id === activeExtensionId)
 
   // Handle webview loading state
   useEffect(() => {
-    if (!activeExt) return;
-    
-    const webview = document.querySelector('webview') as any;
-    if (!webview) return;
+    if (!activeExt) return
 
-    const startLoading = () => setLoading(true);
-    const stopLoading = () => setLoading(false);
+    const webview = document.querySelector('webview') as any
+    if (!webview) return
 
-    webview.addEventListener('did-start-loading', startLoading);
-    webview.addEventListener('did-stop-loading', stopLoading);
-    
+    const startLoading = () => setLoading(true)
+    const stopLoading = () => setLoading(false)
+
+    webview.addEventListener('did-start-loading', startLoading)
+    webview.addEventListener('did-stop-loading', stopLoading)
+
     return () => {
-      webview.removeEventListener('did-start-loading', startLoading);
-      webview.removeEventListener('did-stop-loading', stopLoading);
-    };
-  }, [activeExt]);
+      webview.removeEventListener('did-start-loading', startLoading)
+      webview.removeEventListener('did-stop-loading', stopLoading)
+    }
+  }, [activeExt])
 
   const handleRefresh = () => {
-    const webview = document.querySelector('webview') as any;
-    if (webview) webview.reload();
+    const webview = document.querySelector('webview') as any
+    if (webview) webview.reload()
   }
 
   if (!activeExt) {
     return (
-      <div className="flex flex-col h-full bg-nova-bg text-nova-text">
-        <div className="h-[35px] min-h-[35px] flex items-center justify-between px-3 bg-nova-bg-secondary border-b border-nova-border">
-          <div className="flex items-center gap-2">
-            <Puzzle size={14} className="text-nova-accent" />
-            <span className="text-xs font-semibold text-nova-text-secondary uppercase tracking-wider">Web IAs</span>
-          </div>
+      <div className="flex flex-col h-full bg-[#0d1c2d] text-[#d4e4fa] font-sans">
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-outline-variant flex justify-between items-center bg-[#0d1c2d] select-none">
+          <h2 className="font-label-xs text-label-xs uppercase tracking-widest text-on-surface-variant">Extensions</h2>
+          <span className="material-symbols-outlined text-sm opacity-60 cursor-pointer hover:text-[#4edea3]">more_horiz</span>
         </div>
-        
-        <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
-          <div className="mb-4">
-            <h2 className="text-sm font-semibold text-white mb-1">Marketplace de IAs</h2>
-            <p className="text-xs text-nova-text-muted">Acesse a interface web oficial de diversas inteligências artificiais diretamente na sua IDE.</p>
+
+        <div className="p-4 flex-1 overflow-y-auto scrollbar-thin space-y-6">
+          {/* Search Marketplace */}
+          <div className="relative">
+            <input 
+              className="w-full bg-surface-container-low border border-outline-variant rounded px-3 py-2 text-label-xs font-label-xs focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all placeholder:opacity-50 text-on-surface" 
+              placeholder="Search Marketplace" 
+              type="text"
+            />
+            <span className="material-symbols-outlined absolute right-2 top-2 text-sm opacity-40">search</span>
           </div>
-          
-          <div className="grid grid-cols-1 gap-2">
-            {installed.map(ext => (
-              <button
-                key={ext.id}
-                onClick={() => setActiveExtension(ext.id)}
-                className="flex items-center justify-between p-3 bg-nova-bg-secondary border border-nova-border rounded-lg hover:border-nova-accent hover:bg-[#13211c] transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="text-xl bg-[#08110d] w-10 h-10 flex items-center justify-center rounded border border-nova-border group-hover:border-nova-accent/50 transition-colors">
-                    {ext.icon}
-                  </div>
-                  <div className="flex flex-col items-start">
-                    <span className="text-sm font-medium text-white">{ext.name}</span>
-                    <span className="text-[10px] text-nova-text-muted">{ext.url}</span>
-                  </div>
-                </div>
-                <div className="text-[10px] font-medium text-nova-accent opacity-0 group-hover:opacity-100 transition-opacity bg-nova-accent/10 px-2 py-1 rounded">
-                  Abrir
-                </div>
-              </button>
-            ))}
+
+          {/* Navigation Categories */}
+          <nav className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 p-2 rounded hover:bg-surface-variant/30 cursor-pointer text-primary bg-primary/5">
+              <span className="material-symbols-outlined text-base">trending_up</span>
+              <span className="text-label-xs font-label-xs">Trending</span>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded hover:bg-surface-variant/30 cursor-pointer text-on-surface-variant">
+              <span className="material-symbols-outlined text-base">bug_report</span>
+              <span className="text-label-xs font-label-xs">Debuggers</span>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded hover:bg-surface-variant/30 cursor-pointer text-on-surface-variant">
+              <span className="material-symbols-outlined text-base">palette</span>
+              <span className="text-label-xs font-label-xs">Themes</span>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded hover:bg-surface-variant/30 cursor-pointer text-on-surface-variant">
+              <span className="material-symbols-outlined text-base">language</span>
+              <span className="text-label-xs font-label-xs">Programming Languages</span>
+            </div>
+            <div className="flex items-center gap-2 p-2 rounded hover:bg-surface-variant/30 cursor-pointer text-on-surface-variant">
+              <span className="material-symbols-outlined text-base">cloud_done</span>
+              <span className="text-label-xs font-label-xs">Cloud Development</span>
+            </div>
+          </nav>
+
+          {/* Recommended list */}
+          <div>
+            <h3 className="font-label-xs text-label-xs opacity-40 uppercase px-2 mb-2">Recommended</h3>
+            <div className="flex items-center gap-3 p-2 group cursor-pointer hover:bg-surface-variant/20 rounded-lg">
+              <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-lg">bolt</span>
+              </div>
+              <div>
+                <div className="text-label-xs font-bold text-white">FastLint Pro</div>
+                <div className="text-[10px] text-on-surface-variant">v2.4.0</div>
+              </div>
+            </div>
           </div>
-          
-          <div className="mt-8 p-4 bg-nova-bg-secondary/50 rounded-lg border border-nova-border border-dashed text-center">
-            <p className="text-[10px] text-nova-text-muted">As extensões abrem um navegador interno (Webview) da URL oficial. É necessário fazer login na sua conta para usá-las.</p>
+
+          {/* Web Shortcuts (Atalhos Web) */}
+          <div className="pt-4 border-t border-outline-variant/30">
+            <h3 className="font-label-xs text-label-xs opacity-40 uppercase px-2 mb-3 tracking-widest flex items-center gap-1">
+              <span className="material-symbols-outlined text-sm">language</span> Atalhos Web (Navegador)
+            </h3>
+            <div className="space-y-1">
+              {webExtensions.map(ext => (
+                <button
+                  key={ext.id}
+                  onClick={() => setActiveExtension(ext.id)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs text-on-surface-variant hover:text-primary hover:bg-[#122131]/40 text-left transition-all border border-transparent hover:border-outline-variant/20"
+                >
+                  <span className="text-sm shrink-0">{ext.icon}</span>
+                  <span className="font-semibold truncate">{ext.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -80,34 +115,34 @@ export default function AIExtensionsPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-nova-bg">
+    <div className="flex flex-col h-full bg-[#051424]">
       {/* WebView Toolbar */}
-      <div className="h-[35px] min-h-[35px] flex items-center justify-between px-2 bg-nova-bg-secondary border-b border-nova-border">
+      <div className="h-9 min-h-[36px] flex items-center justify-between px-2 bg-[#0d1c2d] border-b border-[#3c4a42]/20">
         <div className="flex items-center gap-1">
-          <button 
+          <button
             onClick={() => setActiveExtension(null)}
-            className="p-1.5 rounded hover:bg-nova-hover text-nova-text-secondary hover:text-white transition-colors"
+            className="p-1.5 rounded hover:bg-[#122131] text-[#bbcabf] hover:text-[#d4e4fa] transition-colors"
             title="Voltar"
           >
             <Home size={14} />
           </button>
-          <button 
+          <button
             onClick={handleRefresh}
-            className={`p-1.5 rounded hover:bg-nova-hover text-nova-text-secondary hover:text-white transition-colors ${loading ? 'animate-spin opacity-50' : ''}`}
+            className={`p-1.5 rounded hover:bg-[#122131] text-[#bbcabf] hover:text-[#d4e4fa] transition-colors ${loading ? 'animate-spin opacity-50' : ''}`}
             title="Recarregar página"
           >
             <RefreshCw size={14} />
           </button>
         </div>
-        
+
         <div className="flex items-center gap-2 max-w-[200px] overflow-hidden">
-          <span className="text-xs font-semibold text-nova-accent truncate">{activeExt.name}</span>
+          <span className="text-xs font-bold text-[#4edea3] truncate">{activeExt.name}</span>
         </div>
-        
+
         <div className="flex items-center gap-1">
-          <button 
+          <button
             onClick={() => setActiveExtension(null)}
-            className="p-1.5 rounded hover:bg-nova-error/20 text-nova-text-secondary hover:text-nova-error transition-colors"
+            className="p-1.5 rounded hover:bg-red-500/10 text-[#bbcabf] hover:text-red-400 transition-colors"
             title="Fechar"
           >
             <X size={14} />
@@ -118,8 +153,8 @@ export default function AIExtensionsPanel() {
       {/* Electron Webview Tag */}
       <div className="flex-1 bg-white relative">
         {loading && (
-          <div className="absolute top-0 left-0 w-full h-1 bg-nova-bg-secondary z-10 overflow-hidden">
-            <div className="h-full bg-nova-accent animate-[pulse_1.5s_ease-in-out_infinite] w-1/3 rounded-r-full"></div>
+          <div className="absolute top-0 left-0 w-full h-1 bg-[#0d1c2d] z-10 overflow-hidden">
+            <div className="h-full bg-[#4edea3] animate-[pulse_1.5s_ease-in-out_infinite] w-1/3 rounded-r-full"></div>
           </div>
         )}
         {React.createElement('webview', {

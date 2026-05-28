@@ -4,6 +4,7 @@ import SearchPanel from '../search/SearchPanel'
 import GitPanel from '../git/GitPanel'
 import AIExtensionsPanel from '../extensions/AIExtensionsPanel'
 import LdapPanel from '../ldap/LdapPanel'
+import SettingsSidebar from '../settings/SettingsSidebar'
 
 export default function Sidebar() {
   const { isOpen, activeView, width } = useSidebarStore()
@@ -13,7 +14,8 @@ export default function Sidebar() {
     search: 'PESQUISA',
     git: 'CONTROLE DE VERSÃO',
     ldap: 'ACTIVE DIRECTORY',
-    extensions: 'EXTENSÕES',
+    extensions: 'MARKETPLACE',
+    settings: 'CONFIGURAÇÕES',
   }
 
   return (
@@ -25,7 +27,7 @@ export default function Sidebar() {
     >
       {isOpen && (
         <>
-          {activeView !== 'extensions' && (
+          {activeView !== 'extensions' && activeView !== 'settings' && (
             <div className="h-[35px] min-h-[35px] flex items-center px-4 text-xs font-semibold text-nova-text-secondary tracking-wider uppercase">
               {viewTitles[activeView || 'explorer'] || 'EXPLORER'}
             </div>
@@ -36,6 +38,7 @@ export default function Sidebar() {
             {activeView === 'search' && <SearchPanel />}
             {activeView === 'ldap' && <LdapPanel />}
             {activeView === 'extensions' && <AIExtensionsPanel />}
+            {activeView === 'settings' && <SettingsSidebar />}
           </div>
         </>
       )}

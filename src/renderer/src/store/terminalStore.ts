@@ -15,6 +15,8 @@ interface TerminalState {
   clearError: () => void
 }
 
+import { useExplorerStore } from './explorerStore'
+
 export const useTerminalStore = create<TerminalState>((set, get) => ({
   terminals: [],
   activeTerminalId: null,
@@ -58,7 +60,8 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       return
     }
     try {
-      const id = await api.createTerminal()
+      const cwd = useExplorerStore.getState().rootPath || undefined;
+      const id = await api.createTerminal(undefined, cwd)
       if (!id) {
         set({ terminalError: 'Falha ao criar processo do terminal' })
         return

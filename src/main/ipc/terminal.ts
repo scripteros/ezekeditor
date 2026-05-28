@@ -20,18 +20,20 @@ function getUserEnv(): NodeJS.ProcessEnv {
 }
 
 export function registerTerminalHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.CREATE_TERMINAL, (event, shell?: string) => {
+  ipcMain.handle(IPC_CHANNELS.CREATE_TERMINAL, (event, shell?: string, cwd?: string) => {
     const id = `terminal-${++terminalCounter}`
     const shellPath = shell || getDefaultShell()
     const win = BrowserWindow.fromWebContents(event.sender)
     const userEnv = getUserEnv()
 
     const shellArgs = os.platform() === 'win32' ? ['/K'] : []
+    const resolvedCwd = cwd || os.homedir()
+    console.log(`[CREATE_TERMINAL] shell=${shellPath} cwd=${cwd} resolvedCwd=${resolvedCwd}`)
     const ptyProcess = spawn(shellPath, shellArgs, {
       name: 'xterm-color',
       cols: 80,
       rows: 24,
-      cwd: os.homedir(),
+      cwd: resolvedCwd,
       env: {
         ...userEnv,
         TERM: 'xterm-256color',

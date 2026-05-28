@@ -13,22 +13,28 @@ import type { AIAttachment } from '../../../shared/types/ai'
 import { useTerminalStore } from '../../store/terminalStore'
 import { useEditorStore } from '../../store/editorStore'
 import { useSqlStore } from '../../store/sqlStore'
+import { useSidebarStore } from '../../store/sidebarStore'
 
 export default function AIChatPanel() {
   const {
     messages, addMessage, appendMessageContent, isProcessing, sendMessage, cancelRequest, config, setConfig,
     routeWayModels, isLoadingModels, fetchRouteWayModels, selectRouteWayModel,
+    ollamaModels, isLoadingOllamaModels, fetchOllamaModels, selectOllamaModel,
     openRouterModels, isLoadingOpenRouterModels, fetchOpenRouterModels, selectOpenRouterModel,
     deepsproxyModels, isLoadingDeepsProxyModels, fetchDeepsProxyModels, selectDeepsProxyModel,
     isDeepsProxyInstalled, checkDeepsProxyInstalled,
     kimiproxyModels, isLoadingKimiProxyModels, fetchKimiProxyModels, selectKimiProxyModel,
     isKimiProxyInstalled, checkKimiProxyInstalled,
-    deepsProxyStatus, kimiProxyStatus,
+    geminiproxyModels, isLoadingGeminiProxyModels, fetchGeminiProxyModels, selectGeminiProxyModel,
+    isGeminiProxyInstalled, checkGeminiProxyInstalled,
+    deepsProxyStatus, kimiProxyStatus, geminiProxyStatus,
     savedConfigs, saveCurrentConfig, deleteConfig, loadConfig,
     chatHistories, saveChatHistory, loadChatHistory, deleteChatHistory,
-    currentChatId, createNewChat, clearChat, revertMessageChanges
+    currentChatId, createNewChat, clearChat, revertMessageChanges,
+    acquiredProxies, enabledAIProviders
   } = useAIStore()
   const { openDiff } = useEditorStore()
+  const { setActiveView } = useSidebarStore()
   const [input, setInput] = useState('')
   const [showSettings, setShowSettings] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -37,6 +43,7 @@ export default function AIChatPanel() {
   const [testStatus, setTestStatus] = useState<{status: 'idle'|'testing'|'success'|'error', msg?: string}>({status: 'idle'})
   const [isInstallingDeepsProxy, setIsInstallingDeepsProxy] = useState(false)
   const [isInstallingKimiProxy, setIsInstallingKimiProxy] = useState(false)
+  const [isInstallingGeminiProxy, setIsInstallingGeminiProxy] = useState(false)
   const [streamingStatus, setStreamingStatus] = useState<string>('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -263,11 +270,26 @@ export default function AIChatPanel() {
   }, []);
 
   useEffect(() => {
+    if (enabledAIProviders.length > 0 && !enabledAIProviders.includes(config.provider)) {
+      const nextProvider = enabledAIProviders[0] as any
+      const nextConfig: any = { provider: nextProvider, model: '' }
+      if (nextProvider === 'ollama') nextConfig.baseUrl = 'http://localhost:11434'
+      if (nextProvider === 'openai') nextConfig.baseUrl = 'https://api.openai.com/v1'
+      if (nextProvider === 'routeway') nextConfig.baseUrl = 'https://api.routeway.ai/v1'
+      if (nextProvider === 'openrouter') nextConfig.baseUrl = 'https://openrouter.ai/api/v1'
+      if (nextProvider === 'deepsproxy' || nextProvider === 'kimiproxy' || nextProvider === 'geminiproxy') nextConfig.baseUrl = 'http://localhost:3000/v1'
+      setConfig(nextConfig)
+      return
+    }
+
     if (config.provider === 'routeway' && config.apiKey && routeWayModels.length === 0) {
       fetchRouteWayModels()
     }
     if (config.provider === 'openrouter' && config.apiKey && openRouterModels.length === 0) {
       fetchOpenRouterModels()
+    }
+    if (config.provider === 'ollama' && ollamaModels.length === 0) {
+      fetchOllamaModels()
     }
     if (config.provider === 'deepsproxy') {
       if (deepsproxyModels.length === 0) fetchDeepsProxyModels()
@@ -277,7 +299,11 @@ export default function AIChatPanel() {
       if (kimiproxyModels.length === 0) fetchKimiProxyModels()
       checkKimiProxyInstalled()
     }
-  }, [config.provider, config.apiKey])
+    if (config.provider === 'geminiproxy') {
+      if (geminiproxyModels.length === 0) fetchGeminiProxyModels()
+      checkGeminiProxyInstalled()
+    }
+  }, [config.provider, config.apiKey, enabledAIProviders.length])
 
   const handleSend = async () => {
     if ((!input.trim() && selectedFiles.length === 0) || isProcessing) return
@@ -355,11 +381,15 @@ export default function AIChatPanel() {
   }
 
   const isModelConfigured = () => {
+    if (!enabledAIProviders.includes(config.provider)) return false
     if (config.provider === 'routeway' || config.provider === 'openrouter') return config.apiKey && config.model
     if (config.provider === 'codebuff') return config.apiKey !== ''
+    if (config.provider === 'openai') return config.apiKey && config.model
+    if (config.provider === 'custom') return config.baseUrl && config.model
     if (config.provider === 'deepsproxy') return true
     if (config.provider === 'kimiproxy') return true
-    if (config.provider === 'ollama') return true
+    if (config.provider === 'geminiproxy') return true
+    if (config.provider === 'ollama') return config.baseUrl && config.model
     return config.apiKey && config.model
   }
 
@@ -381,8 +411,8 @@ export default function AIChatPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-nova-bg">
-      <div className="h-[35px] min-h-[35px] flex items-center justify-between px-3 bg-nova-bg-secondary border-b border-nova-border">
+    <div className="relative flex flex-col h-full overflow-hidden bg-nova-bg ai-gradient">
+      <div className="h-[35px] min-h-[35px] flex items-center justify-between px-3 bg-nova-bg-secondary border-b border-nova-border glass-panel">
         <div className="flex items-center gap-2">
           <Sparkles size={14} className="text-nova-accent" />
           <span className="text-xs font-semibold text-nova-text-secondary uppercase tracking-wider">Chat IA</span>
@@ -414,20 +444,40 @@ export default function AIChatPanel() {
       </div>
 
       {showSettings && (
-        <div className="px-3 py-2 bg-nova-bg-secondary border-b border-nova-border space-y-2 max-h-[250px] overflow-y-auto scrollbar-thin">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-nova-text-secondary uppercase">Configurações</span>
-            <div className="flex items-center gap-2">
-              <button onClick={handleTestConnection} disabled={testStatus.status === 'testing' || !isModelConfigured()} className="flex items-center gap-1 text-[10px] text-nova-text-muted hover:text-nova-success disabled:opacity-50" title={testStatus.msg}>
-                {testStatus.status === 'testing' ? 'Testando...' : testStatus.status === 'success' ? '✅ OK' : testStatus.status === 'error' ? '❌ Erro' : 'Testar Conexão'}
-              </button>
-              {testStatus.status === 'error' && (
-                <span className="text-[10px] text-nova-error truncate max-w-[150px]">{testStatus.msg}</span>
-              )}
-              <button onClick={saveCurrentConfig} className="flex items-center gap-1 text-[10px] text-nova-accent hover:text-nova-accent-hover ml-2">
-                <Save size={10} /> Salvar
+        <div className="absolute inset-0 z-30 flex items-start justify-center bg-nova-bg/70 p-4 backdrop-blur-sm">
+          <div className="glass-panel flex max-h-full w-full max-w-[560px] flex-col overflow-hidden rounded-xl border border-nova-accent/25 shadow-2xl shadow-black/30">
+            <div className="flex items-center justify-between border-b border-nova-border bg-nova-bg-secondary/95 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Settings size={15} className="text-nova-accent" />
+                <div>
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-nova-text">Configurações de IA</h2>
+                  <p className="text-[10px] text-nova-text-muted">Provedor, modelo, chaves e controles locais.</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="rounded p-1.5 text-nova-text-muted transition-colors hover:bg-nova-hover hover:text-nova-text"
+                title="Fechar configurações"
+              >
+                <X size={15} />
               </button>
             </div>
+            <div className="space-y-3 overflow-y-auto p-4 scrollbar-thin">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-nova-text-secondary uppercase">Configurações</span>
+            {enabledAIProviders.length > 0 && (
+              <div className="flex items-center gap-2">
+                <button onClick={handleTestConnection} disabled={testStatus.status === 'testing' || !isModelConfigured()} className="flex items-center gap-1 text-[10px] text-nova-text-muted hover:text-nova-success disabled:opacity-50" title={testStatus.msg}>
+                  {testStatus.status === 'testing' ? 'Testando...' : testStatus.status === 'success' ? 'OK' : testStatus.status === 'error' ? 'Erro' : 'Testar Conexão'}
+                </button>
+                {testStatus.status === 'error' && (
+                  <span className="text-[10px] text-nova-error truncate max-w-[150px]">{testStatus.msg}</span>
+                )}
+                <button onClick={saveCurrentConfig} className="flex items-center gap-1 text-[10px] text-nova-accent hover:text-nova-accent-hover ml-2">
+                  <Save size={10} /> Salvar
+                </button>
+              </div>
+            )}
           </div>
 
           {savedConfigs.length > 0 && (
@@ -452,24 +502,77 @@ export default function AIChatPanel() {
             </div>
           )}
 
+          {enabledAIProviders.length === 0 ? (
+            <div className="rounded-lg border border-nova-accent/20 bg-nova-accent/10 p-3">
+              <div className="mb-1 flex items-center gap-2 text-xs font-bold text-nova-text">
+                <Sparkles size={13} className="text-nova-accent" />
+                Nenhum provedor ativo
+              </div>
+              <p className="text-[11px] leading-relaxed text-nova-text-secondary">
+                Marque um provedor no Marketplace para liberar URL, modelo, chave e permissões da IA.
+              </p>
+              <button
+                onClick={() => {
+                  setShowSettings(false)
+                  setActiveView('extensions')
+                }}
+                className="mt-3 rounded bg-nova-accent px-3 py-1.5 text-xs font-bold text-nova-statusbar-text hover:bg-nova-accent-hover"
+              >
+                Abrir Marketplace
+              </button>
+            </div>
+          ) : (
+            <>
           <select
             value={config.provider}
             onChange={e => {
-              setConfig({ provider: e.target.value as any })
-              if (e.target.value === 'routeway') fetchRouteWayModels()
-              if (e.target.value === 'openrouter') fetchOpenRouterModels()
+              if (!e.target.value) return
+              const provider = e.target.value
+              const nextConfig: any = { provider, model: '' }
+              if (provider === 'ollama') nextConfig.baseUrl = config.baseUrl?.startsWith('http') ? config.baseUrl : 'http://localhost:11434'
+              if (provider === 'openai') nextConfig.baseUrl = config.baseUrl?.startsWith('http') ? config.baseUrl : 'https://api.openai.com/v1'
+              if (provider === 'routeway') nextConfig.baseUrl = 'https://api.routeway.ai/v1'
+              if (provider === 'openrouter') nextConfig.baseUrl = 'https://openrouter.ai/api/v1'
+              setConfig(nextConfig)
+              if (provider === 'routeway') fetchRouteWayModels()
+              if (provider === 'openrouter') fetchOpenRouterModels()
+              if (provider === 'ollama') fetchOllamaModels()
+              if (provider === 'deepsproxy') fetchDeepsProxyModels()
+              if (provider === 'kimiproxy') fetchKimiProxyModels()
+              if (provider === 'geminiproxy') fetchGeminiProxyModels()
             }}
             className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
           >
-            <option value="routeway">RouteWay (Grátis)</option>
-            <option value="ollama">Ollama (Local)</option>
-            <option value="openai">OpenAI</option>
-            <option value="codebuff">Codebuff (Agente Nativo)</option>
-            <option value="deepsproxy">DeepsProxy (Navegador Local)</option>
-            <option value="kimiproxy">KimiProxy (Navegador Local)</option>
-            <option value="ds2api">Deepseek ds2api</option>
-            <option value="openrouter">OpenRouter</option>
-            <option value="custom">API Personalizada</option>
+            {enabledAIProviders.length === 0 && (
+              <option value="">Marque provedores no Marketplace</option>
+            )}
+            {enabledAIProviders.includes('routeway') && (
+              <option value="routeway">RouteWay</option>
+            )}
+            {enabledAIProviders.includes('ollama') && (
+              <option value="ollama">Ollama (Local)</option>
+            )}
+            {enabledAIProviders.includes('openai') && (
+              <option value="openai">OpenAI</option>
+            )}
+            {enabledAIProviders.includes('codebuff') && (
+              <option value="codebuff">Codebuff (Agente Nativo)</option>
+            )}
+            {enabledAIProviders.includes('deepsproxy') && acquiredProxies.includes('deepsproxy') && isDeepsProxyInstalled && (
+              <option value="deepsproxy">DeepsProxy (Navegador Local)</option>
+            )}
+            {enabledAIProviders.includes('kimiproxy') && acquiredProxies.includes('kimiproxy') && isKimiProxyInstalled && (
+              <option value="kimiproxy">KimiProxy (Navegador Local)</option>
+            )}
+            {enabledAIProviders.includes('geminiproxy') && acquiredProxies.includes('geminiproxy') && isGeminiProxyInstalled && (
+              <option value="geminiproxy">GeminiProxy (Navegador Local)</option>
+            )}
+            {enabledAIProviders.includes('openrouter') && (
+              <option value="openrouter">OpenRouter</option>
+            )}
+            {enabledAIProviders.includes('custom') && (
+              <option value="custom">API Personalizada</option>
+            )}
           </select>
 
           {config.provider === 'routeway' && (
@@ -505,6 +608,44 @@ export default function AIChatPanel() {
             </>
           )}
 
+          {config.provider === 'ollama' && (
+            <>
+              <input
+                type="text"
+                placeholder="URL do Ollama"
+                value={config.baseUrl || 'http://localhost:11434'}
+                onChange={e => setConfig({ baseUrl: e.target.value })}
+                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+              />
+              <button
+                onClick={fetchOllamaModels}
+                disabled={isLoadingOllamaModels || !config.baseUrl}
+                className="w-full px-2 py-1 text-xs bg-nova-accent text-white rounded hover:bg-nova-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isLoadingOllamaModels ? 'Carregando...' : 'Buscar Modelos Locais'}
+              </button>
+              {ollamaModels.length > 0 ? (
+                <select
+                  value={config.model}
+                  onChange={e => selectOllamaModel(e.target.value)}
+                  className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+                >
+                  {ollamaModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Modelo Ollama, ex: llama3.2"
+                  value={config.model}
+                  onChange={e => setConfig({ model: e.target.value })}
+                  className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+                />
+              )}
+            </>
+          )}
+
           {config.provider === 'openrouter' && (
             <>
               <input
@@ -535,6 +676,32 @@ export default function AIChatPanel() {
               {openRouterModels.length === 0 && !isLoadingOpenRouterModels && (
                 <p className="text-[10px] text-nova-text-muted">Informe sua API Key e clique em "Buscar"</p>
               )}
+            </>
+          )}
+
+          {config.provider === 'openai' && (
+            <>
+              <input
+                type="text"
+                placeholder="URL Base OpenAI"
+                value={config.baseUrl || 'https://api.openai.com/v1'}
+                onChange={e => setConfig({ baseUrl: e.target.value })}
+                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+              />
+              <input
+                type="password"
+                placeholder="Chave da API OpenAI"
+                value={config.apiKey}
+                onChange={e => setConfig({ apiKey: e.target.value })}
+                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+              />
+              <input
+                type="text"
+                placeholder="Modelo, ex: gpt-4o-mini"
+                value={config.model}
+                onChange={e => setConfig({ model: e.target.value })}
+                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+              />
             </>
           )}
 
@@ -619,13 +786,15 @@ export default function AIChatPanel() {
                         if (deepsProxyStatus === 'online') {
                           await api.aiStopProxy('deepsproxy');
                         } else {
+                          useAIStore.getState().setProxyStatus('deepsproxy', 'starting');
                           await api.aiStartProxy('deepsproxy');
                         }
                       }
                     }}
-                    className={`w-full px-2 py-1 text-xs text-white rounded transition-colors ${deepsProxyStatus === 'online' ? 'bg-red-600 hover:bg-red-700' : 'bg-nova-accent hover:bg-nova-accent-hover'}`}
+                    disabled={deepsProxyStatus === 'starting'}
+                    className={`w-full px-2 py-1 text-xs text-white rounded transition-colors ${deepsProxyStatus === 'online' ? 'bg-red-600 hover:bg-red-700' : deepsProxyStatus === 'starting' ? 'bg-yellow-600 cursor-wait' : 'bg-nova-accent hover:bg-nova-accent-hover'}`}
                   >
-                    {deepsProxyStatus === 'online' ? 'Parar Servidor DeepsProxy' : 'Iniciar Servidor DeepsProxy'}
+                    {deepsProxyStatus === 'online' ? 'Parar Servidor DeepsProxy' : deepsProxyStatus === 'starting' ? (<span className="flex items-center justify-center gap-2"><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Iniciando...</span>) : 'Iniciar Servidor DeepsProxy'}
                   </button>
                   <button
                     onClick={async () => {
@@ -735,13 +904,15 @@ export default function AIChatPanel() {
                         if (kimiProxyStatus === 'online') {
                           await api.aiStopProxy('kimiproxy');
                         } else {
+                          useAIStore.getState().setProxyStatus('kimiproxy', 'starting');
                           await api.aiStartProxy('kimiproxy');
                         }
                       }
                     }}
-                    className={`w-full px-2 py-1 text-xs text-white rounded transition-colors ${kimiProxyStatus === 'online' ? 'bg-red-600 hover:bg-red-700' : 'bg-nova-accent hover:bg-nova-accent-hover'}`}
+                    disabled={kimiProxyStatus === 'starting'}
+                    className={`w-full px-2 py-1 text-xs text-white rounded transition-colors ${kimiProxyStatus === 'online' ? 'bg-red-600 hover:bg-red-700' : kimiProxyStatus === 'starting' ? 'bg-yellow-600 cursor-wait' : 'bg-nova-accent hover:bg-nova-accent-hover'}`}
                   >
-                    {kimiProxyStatus === 'online' ? 'Parar Servidor KimiProxy' : 'Iniciar Servidor KimiProxy'}
+                    {kimiProxyStatus === 'online' ? 'Parar Servidor KimiProxy' : kimiProxyStatus === 'starting' ? (<span className="flex items-center justify-center gap-2"><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Iniciando...</span>) : 'Iniciar Servidor KimiProxy'}
                   </button>
                   <button
                     onClick={async () => {
@@ -783,40 +954,147 @@ export default function AIChatPanel() {
             </>
           )}
 
-          {config.provider === 'ds2api' && (
+          {config.provider === 'geminiproxy' && (
             <>
-              <input type="text" placeholder="Modelo (ex: deepseek-chat)" value={config.model} onChange={e => setConfig({ model: e.target.value })}
-                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent mb-2" />
-              <input type="text" placeholder="URL Base (ex: http://localhost:8080/v1)" value={config.baseUrl} onChange={e => setConfig({ baseUrl: e.target.value })}
-                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent mb-2" />
-              <input type="password" placeholder="Chave da API (se houver)" value={config.apiKey} onChange={e => setConfig({ apiKey: e.target.value })}
-                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent mb-2" />
-              <button
-                onClick={async () => {
-                  const api = (window as any).api;
-                  if (api) {
-                    const termId = await api.createTerminal('cmd.exe');
-                    useTerminalStore.getState().addTerminal({ id: termId, name: 'ds2api Server' });
-                    useTerminalStore.getState().setActiveTerminal(termId);
-                    await api.writeToTerminal(termId, `cd /d "C:\\Users\\Quiel\\Downloads\\ds2api_v4.6.1_windows_arm64\\ds2api_v4.6.1_windows_arm64"\r`);
-                    await api.writeToTerminal(termId, `.\\ds2api.exe\r`);
-                  }
-                }}
-                className="w-full px-2 py-1 text-xs bg-nova-accent text-white rounded hover:bg-nova-accent-hover transition-colors mb-2"
-              >
-                Iniciar Servidor ds2api
-              </button>
+              {!isGeminiProxyInstalled ? (
+                <div className="space-y-2 p-2 bg-nova-bg border border-nova-border rounded">
+                  <p className="text-[10px] text-nova-text-muted">
+                    O GeminiProxy ainda não está instalado no seu sistema. Ele requer Git, Node.js e Playwright.
+                  </p>
+                  <button
+                    onClick={async () => {
+                      const api = (window as any).api;
+                      if (!api || isInstallingGeminiProxy) return;
+                      setIsInstallingGeminiProxy(true);
+                      
+                      const msgId = Date.now().toString();
+                      addMessage({
+                        id: msgId,
+                        role: 'assistant',
+                        content: '⏳ Iniciando instalação do GeminiProxy...\n\n```log\n',
+                        timestamp: Date.now(),
+                        type: 'info'
+                      });
+
+                      const unlisten = api.onAiInstallLog((log: string) => {
+                        appendMessageContent(msgId, log);
+                      });
+
+                      const success = await api.aiInstallGeminiProxy();
+                      unlisten();
+
+                      appendMessageContent(msgId, '\n```\n');
+
+                      if (success) {
+                        addMessage({
+                          id: (Date.now() + 1).toString(),
+                          role: 'assistant',
+                          content: '✅ GeminiProxy instalado com sucesso! A configuração foi atualizada.',
+                          timestamp: Date.now(),
+                          type: 'info'
+                        });
+                        await checkGeminiProxyInstalled();
+                      } else {
+                        addMessage({
+                          id: (Date.now() + 1).toString(),
+                          role: 'assistant',
+                          content: '❌ Ocorreu um erro durante a instalação. Verifique os logs acima.',
+                          timestamp: Date.now(),
+                          type: 'error'
+                        });
+                      }
+                      
+                      setIsInstallingGeminiProxy(false);
+                    }}
+                    disabled={isInstallingGeminiProxy}
+                    className="w-full px-2 py-1 text-xs bg-nova-accent text-white rounded hover:bg-nova-accent-hover transition-colors disabled:opacity-50"
+                  >
+                    {isInstallingGeminiProxy ? 'Instalando...' : 'Baixar e Instalar GeminiProxy'}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[10px] text-nova-success text-center">GeminiProxy está instalado localmente!</p>
+                  <button
+                    onClick={async () => {
+                      const api = (window as any).api;
+                      if (api) {
+                        if (geminiProxyStatus === 'online') {
+                          await api.aiStopProxy('geminiproxy');
+                        } else {
+                          useAIStore.getState().setProxyStatus('geminiproxy', 'starting');
+                          await api.aiStartProxy('geminiproxy');
+                        }
+                      }
+                    }}
+                    disabled={geminiProxyStatus === 'starting'}
+                    className={`w-full px-2 py-1 text-xs text-white rounded transition-colors ${geminiProxyStatus === 'online' ? 'bg-red-600 hover:bg-red-700' : geminiProxyStatus === 'starting' ? 'bg-yellow-600 cursor-wait' : 'bg-nova-accent hover:bg-nova-accent-hover'}`}
+                  >
+                    {geminiProxyStatus === 'online' ? 'Parar Servidor GeminiProxy' : geminiProxyStatus === 'starting' ? (<span className="flex items-center justify-center gap-2"><span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Iniciando...</span>) : 'Iniciar Servidor GeminiProxy'}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const api = (window as any).api;
+                      if (api && config.geminiproxyPath) {
+                        const termId = await api.createTerminal('cmd.exe');
+                        useTerminalStore.getState().addTerminal({ id: termId, name: 'GeminiProxy Login' });
+                        useTerminalStore.getState().setActiveTerminal(termId);
+
+                        await api.writeToTerminal(termId, `cd /d "${config.geminiproxyPath}"\r`);
+                        await api.writeToTerminal(termId, `npm run login\r`);
+                      }
+                    }}
+                    className="w-full px-2 py-1 text-[10px] bg-nova-bg-tertiary text-nova-text rounded border border-nova-border hover:bg-nova-hover transition-colors"
+                    title="Abre o navegador oculto para você fazer o primeiro login e salvar os dados"
+                  >
+                    Fazer Login no Gemini (1º Acesso)
+                  </button>
+                  <button
+                    onClick={fetchGeminiProxyModels}
+                    disabled={isLoadingGeminiProxyModels}
+                    className="w-full px-2 py-1 text-xs bg-nova-bg-tertiary text-nova-text rounded border border-nova-border hover:bg-nova-hover disabled:opacity-50 transition-colors"
+                  >
+                    {isLoadingGeminiProxyModels ? 'Carregando...' : 'Atualizar Modelos (Requer servidor online)'}
+                  </button>
+                  {geminiproxyModels.length > 0 && (
+                    <select
+                      value={config.model}
+                      onChange={e => selectGeminiProxyModel(e.target.value)}
+                      className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent mt-2"
+                    >
+                      {geminiproxyModels.map(m => (
+                        <option key={m.id} value={m.id}>🤖 {m.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </>
+              )}
             </>
           )}
 
-          {config.provider !== 'routeway' && config.provider !== 'openrouter' && config.provider !== 'codebuff' && config.provider !== 'deepsproxy' && config.provider !== 'kimiproxy' && config.provider !== 'ds2api' && (
+          {config.provider === 'custom' && (
             <>
-              <input type="text" placeholder="Modelo" value={config.model} onChange={e => setConfig({ model: e.target.value })}
-                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent" />
-              <input type="text" placeholder="URL Base" value={config.baseUrl} onChange={e => setConfig({ baseUrl: e.target.value })}
-                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent" />
-              <input type="password" placeholder="Chave da API" value={config.apiKey} onChange={e => setConfig({ apiKey: e.target.value })}
-                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent" />
+              <input
+                type="text"
+                placeholder="URL Base compatível com OpenAI"
+                value={config.baseUrl}
+                onChange={e => setConfig({ baseUrl: e.target.value })}
+                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+              />
+              <input
+                type="text"
+                placeholder="Modelo"
+                value={config.model}
+                onChange={e => setConfig({ model: e.target.value })}
+                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+              />
+              <input
+                type="password"
+                placeholder="Chave da API, se necessária"
+                value={config.apiKey}
+                onChange={e => setConfig({ apiKey: e.target.value })}
+                className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+              />
             </>
           )}
 
@@ -829,15 +1107,19 @@ export default function AIChatPanel() {
                   checked={!!config.allowAutonomousSql}
                   onChange={(e) => setConfig({ allowAutonomousSql: e.target.checked })}
                 />
-                <div className={`block w-8 h-4.5 rounded-full transition-colors ${config.allowAutonomousSql ? 'bg-nova-accent' : 'bg-[#152b21]'}`}></div>
+                <div className={`block w-8 h-4.5 rounded-full transition-colors ${config.allowAutonomousSql ? 'bg-green-500' : 'bg-red-500'}`}></div>
                 <div className={`dot absolute left-0.5 top-0.5 bg-white w-3.5 h-3.5 rounded-full transition-transform ${config.allowAutonomousSql ? 'transform translate-x-3.5' : ''}`}></div>
               </div>
               <div className="flex flex-col">
-                <span className="text-[11px] font-medium text-nova-text group-hover:text-nova-accent transition-colors">Permitir IA Executar SQL</span>
+                <span className={`text-[11px] font-medium transition-colors ${config.allowAutonomousSql ? 'text-green-400' : 'text-red-400'}`}>Permitir IA Executar SQL</span>
                 <span className="text-[9px] text-nova-text-muted">A IA pode consultar o banco de forma autônoma.</span>
               </div>
             </label>
           </div>
+            </>
+          )}
+            </div>
+        </div>
         </div>
       )}
 
@@ -867,39 +1149,48 @@ export default function AIChatPanel() {
             </div>
           </div>
         )}
-        <div className="flex flex-col gap-4 p-4">
+        <div className="flex flex-col gap-5 p-4 bg-nova-bg-secondary/20">
           <AnimatePresence>
             {messages.filter(m => !m.hidden).map((msg, idx) => (
               <motion.div 
-                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                initial={{ opacity: 0, y: 12, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
                 key={msg.id} 
                 className={`group flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
-                <div className={`flex gap-3 max-w-[95%] sm:max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm ${msg.role === 'assistant' ? 'bg-[#101916] border border-nova-accent/20' : 'bg-[#0f2218] border border-nova-accent/10'}`}>
-                    {msg.role === 'assistant' ? <Bot size={16} className="text-nova-accent" /> : <User size={16} className="text-[#f3f4f6]" />}
+                <div className={`flex gap-3 max-w-[96%] sm:max-w-[88%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <div className={`w-9 h-9 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg ${
+                    msg.role === 'assistant'
+                      ? 'bg-nova-accent/15 border border-nova-accent/30 text-nova-accent shadow-nova-accent/10'
+                      : 'bg-nova-bg-tertiary border border-nova-border text-nova-text-secondary'
+                  }`}>
+                    {msg.role === 'assistant' ? <Sparkles size={17} /> : <User size={16} />}
                   </div>
                   <div className={`flex flex-col min-w-0 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex items-center gap-2 mb-1.5 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                       {msg.role === 'assistant' ? (
-                        <span className="text-[11px] font-semibold text-nova-text-secondary">Ezek AI</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-nova-text">Ezek AI</span>
+                          <span className="rounded-full border border-nova-accent/25 bg-nova-accent/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-nova-accent">
+                            Assistente
+                          </span>
+                        </div>
                       ) : (
                         <span className="text-[11px] font-semibold text-nova-text-secondary">Você</span>
                       )}
                       <button
                         onClick={() => handleCopyMessage(msg.content, msg.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-nova-text-muted hover:text-nova-accent hover:bg-[#13211c] transition-all"
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-nova-text-muted hover:text-nova-accent hover:bg-nova-hover transition-all"
                         title="Copiar mensagem"
                       >
                         {copiedId === msg.id ? <Check size={12} className="text-nova-success" /> : <Copy size={12} />}
                       </button>
                     </div>
-                      <div className={`text-[13px] leading-relaxed px-4 py-3 rounded-2xl shadow-sm relative max-w-full overflow-x-auto ${
+                      <div className={`text-[13px] leading-relaxed px-4 py-3.5 rounded-2xl relative max-w-full overflow-x-auto ${
                         msg.role === 'assistant' 
-                          ? 'bg-[#101916] border border-[rgba(0,255,120,0.08)] text-[#f3f4f6] rounded-tl-sm' 
-                          : 'bg-[#0f2218] border border-nova-accent/10 text-white rounded-tr-sm'
+                          ? "bg-[#153047] border border-[#2e5368] text-[#f1f8ff] rounded-tl-md shadow-xl shadow-black/15 before:absolute before:left-0 before:top-4 before:h-10 before:w-[3px] before:rounded-r-full before:bg-nova-accent before:content-['']" 
+                          : 'bg-[#1c3a50] border border-[#365b70] text-[#f5fbff] rounded-tr-md shadow-lg shadow-black/10'
                         }`}>
                         {msg.role === 'assistant' && (msg.parsedSteps || msg.parsedActions) && (
                           <ThinkingBlock steps={msg.parsedSteps} actions={msg.parsedActions} />
@@ -1095,28 +1386,38 @@ export default function AIChatPanel() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-gradient-to-t from-[#08110d] via-[#08110d] to-transparent shrink-0">
-        <div className="relative bg-[#101916] border border-[#152b21] rounded-2xl shadow-lg shadow-black/20 overflow-hidden focus-within:border-nova-accent/50 transition-colors flex flex-col">
+      <div className="p-4 bg-gradient-to-t from-nova-bg via-nova-bg/95 to-transparent shrink-0">
+        <div className="relative overflow-hidden rounded-2xl border border-nova-border bg-[#10283a]/95 shadow-2xl shadow-black/30 transition-all focus-within:border-nova-accent/70 focus-within:shadow-nova-accent/10 flex flex-col">
           {config.provider !== 'codebuff' && (
-            <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+            <div className="flex items-center gap-2 border-b border-white/5 bg-white/5 px-4 py-2">
               <select
                 value={config.model || ''}
                 onChange={e => {
                   if (config.provider === 'routeway' && routeWayModels.length > 0) {
                     selectRouteWayModel(e.target.value)
+                  } else if (config.provider === 'ollama' && ollamaModels.length > 0) {
+                    selectOllamaModel(e.target.value)
                   } else if (config.provider === 'openrouter' && openRouterModels.length > 0) {
                     selectOpenRouterModel(e.target.value)
                   } else if (config.provider === 'deepsproxy' && deepsproxyModels.length > 0) {
                     selectDeepsProxyModel(e.target.value)
+                  } else if (config.provider === 'kimiproxy' && kimiproxyModels.length > 0) {
+                    selectKimiProxyModel(e.target.value)
+                  } else if (config.provider === 'geminiproxy' && geminiproxyModels.length > 0) {
+                    selectGeminiProxyModel(e.target.value)
                   } else {
                     setConfig({ model: e.target.value })
                   }
                 }}
-                className="flex-1 bg-transparent text-[#94a3b8] text-[10px] outline-none cursor-pointer hover:text-[#f3f4f6] transition-colors appearance-none"
+                className="flex-1 bg-transparent text-nova-text-secondary text-[11px] outline-none cursor-pointer hover:text-nova-text transition-colors appearance-none"
               >
                 {config.provider === 'routeway' && routeWayModels.length > 0
                   ? routeWayModels.map(m => (
                       <option key={m.id} value={m.id} className="bg-[#101916] text-[#f3f4f6]">🆓 {m.name.length > 25 ? m.name.substring(0, 25) + '...' : m.name}</option>
+                    ))
+                  : config.provider === 'ollama' && ollamaModels.length > 0
+                  ? ollamaModels.map(m => (
+                      <option key={m.id} value={m.id} className="bg-[#101916] text-[#f3f4f6]">🏠 {m.name.length > 25 ? m.name.substring(0, 25) + '...' : m.name}</option>
                     ))
                   : config.provider === 'openrouter' && openRouterModels.length > 0
                   ? openRouterModels.map(m => (
@@ -1126,17 +1427,25 @@ export default function AIChatPanel() {
                   ? deepsproxyModels.map(m => (
                       <option key={m.id} value={m.id} className="bg-[#101916] text-[#f3f4f6]">🔌 {m.name.length > 25 ? m.name.substring(0, 25) + '...' : m.name}</option>
                     ))
+                  : config.provider === 'kimiproxy' && kimiproxyModels.length > 0
+                  ? kimiproxyModels.map(m => (
+                      <option key={m.id} value={m.id} className="bg-[#101916] text-[#f3f4f6]">🔌 {m.name.length > 25 ? m.name.substring(0, 25) + '...' : m.name}</option>
+                    ))
+                  : config.provider === 'geminiproxy' && geminiproxyModels.length > 0
+                  ? geminiproxyModels.map(m => (
+                      <option key={m.id} value={m.id} className="bg-[#101916] text-[#f3f4f6]">🔌 {m.name.length > 25 ? m.name.substring(0, 25) + '...' : m.name}</option>
+                    ))
                   : <option value={config.model} className="bg-[#101916] text-[#f3f4f6]">{config.model || 'Nenhum modelo'}</option>
                 }
               </select>
-              <span className="text-[9px] text-[#64748b] whitespace-nowrap bg-[#152b21] px-1.5 py-0.5 rounded font-medium">
-                {config.provider === 'routeway' ? 'RouteWay' : config.provider === 'openrouter' ? 'OpenRouter' : config.provider === 'deepsproxy' ? 'DeepsProxy' : config.provider}
+              <span className="text-[9px] text-nova-accent whitespace-nowrap bg-nova-accent/10 border border-nova-accent/20 px-2 py-1 rounded-full font-bold">
+                {config.provider === 'routeway' ? 'RouteWay' : config.provider === 'ollama' ? 'Ollama' : config.provider === 'openai' ? 'OpenAI' : config.provider === 'openrouter' ? 'OpenRouter' : config.provider === 'deepsproxy' ? 'DeepsProxy' : config.provider === 'kimiproxy' ? 'KimiProxy' : config.provider === 'geminiproxy' ? 'GeminiProxy' : config.provider === 'custom' ? 'Custom' : config.provider}
               </span>
             </div>
           )}
 
           {selectedFiles.length > 0 && (
-            <div className="px-3 py-2 border-b border-[#152b21]/50 bg-[#101916]/50">
+            <div className="px-4 py-3 border-b border-white/5 bg-[#0b1d2b]/70">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-[10px] font-medium text-[#94a3b8]">Anexos</div>
                 <button
@@ -1178,7 +1487,7 @@ export default function AIChatPanel() {
             </div>
           )}
 
-          <div className="flex relative items-end px-1 pb-1">
+          <div className="flex flex-col gap-3 p-3">
             <textarea
               ref={inputRef}
               value={input}
@@ -1217,12 +1526,15 @@ export default function AIChatPanel() {
                   }
                 }
               }}
-              placeholder={isModelConfigured() ? 'Pergunte ao Ezek...' : 'Configure a IA nas configurações...'}
-              rows={selectedFiles.length > 0 ? 1 : 2}
-              className="flex-1 bg-transparent text-[#f3f4f6] text-[13px] rounded px-3 py-2 outline-none resize-none placeholder:text-[#64748b] min-h-[44px] max-h-[200px] overflow-y-auto scrollbar-thin"
-              style={{ lineHeight: '1.4' }}
+              placeholder={isModelConfigured() ? 'Digite sua mensagem para o Ezek...' : 'Ative um provedor no Marketplace para conversar...'}
+              rows={4}
+              className="w-full resize-y rounded-xl border border-white/10 bg-[#071a29]/80 px-4 py-3 text-[13px] leading-relaxed text-nova-text outline-none placeholder:text-nova-text-muted transition-all min-h-[104px] max-h-[280px] overflow-y-auto scrollbar-thin focus:border-nova-accent/50 focus:bg-[#082033]"
             />
-            <div className="flex gap-1 pr-2 pb-2 shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0 text-[10px] text-nova-text-muted">
+                Enter envia, Shift+Enter quebra linha
+              </div>
+              <div className="flex gap-1.5 shrink-0">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1233,7 +1545,7 @@ export default function AIChatPanel() {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="p-1.5 text-[#94a3b8] rounded-lg hover:bg-[#152b21] hover:text-nova-accent transition-colors"
+                className="h-8 w-8 flex items-center justify-center text-nova-text-secondary rounded-lg border border-white/10 bg-white/5 hover:bg-nova-accent/10 hover:text-nova-accent transition-colors"
                 title="Anexar arquivo"
                 disabled={isProcessing}
               >
@@ -1241,8 +1553,8 @@ export default function AIChatPanel() {
               </button>
               <button
                 onClick={toggleListening}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  isListening ? 'bg-nova-error/20 text-nova-error' : 'text-[#94a3b8] hover:bg-[#152b21] hover:text-nova-accent'
+                className={`h-8 w-8 flex items-center justify-center rounded-lg border border-white/10 transition-colors ${
+                  isListening ? 'bg-nova-error/20 text-nova-error' : 'bg-white/5 text-nova-text-secondary hover:bg-nova-accent/10 hover:text-nova-accent'
                 }`}
                 title={isListening ? 'Parar gravação' : 'Falar com Ezek (Whisper)'}
                 disabled={isProcessing}
@@ -1250,16 +1562,16 @@ export default function AIChatPanel() {
                 <Mic size={18} className={isListening ? 'animate-pulse' : ''} />
               </button>
               {isProcessing ? (
-                <button onClick={cancelRequest} className="p-1.5 bg-nova-error/10 text-nova-error rounded-lg hover:bg-nova-error/20 transition-colors" title="Parar">
+                <button onClick={cancelRequest} className="h-8 w-8 flex items-center justify-center bg-nova-error/10 text-nova-error rounded-lg border border-nova-error/20 hover:bg-nova-error/20 transition-colors" title="Parar">
                   <StopCircle size={18} />
                 </button>
               ) : (
                 <button 
                   onClick={handleSend} 
-                  className={`p-1.5 rounded-lg transition-colors ${
+                  className={`h-8 min-w-8 px-2 flex items-center justify-center rounded-lg transition-colors ${
                     !isModelConfigured() || (!input.trim() && selectedFiles.length === 0)
-                      ? 'text-[#64748b] bg-transparent'
-                      : 'bg-nova-accent text-white hover:bg-[#16a34a] shadow-sm shadow-nova-accent/20'
+                      ? 'text-[#64748b] bg-white/5 border border-white/10'
+                      : 'bg-nova-accent text-nova-statusbar-text hover:bg-nova-accent-hover shadow-sm shadow-nova-accent/20'
                   }`}
                   title="Enviar" 
                   disabled={!isModelConfigured() || (!input.trim() && selectedFiles.length === 0)}
@@ -1267,6 +1579,7 @@ export default function AIChatPanel() {
                   <Send size={18} className={input.trim() || selectedFiles.length > 0 ? "ml-0.5" : ""} />
                 </button>
               )}
+              </div>
             </div>
           </div>
         </div>
@@ -1283,8 +1596,8 @@ function FormattedMessage({ content }: { content: string }) {
         code({node, inline, className, children, ...props}: any) {
           const match = /language-(\w+)/.exec(className || '')
           return !inline && match ? (
-            <div className="relative group my-2 border border-nova-accent/20 rounded-md overflow-hidden bg-[#0a1511]">
-              <div className="flex items-center justify-between px-2 py-1 bg-[#131d1a] border-b border-nova-accent/10">
+            <div className="relative group my-3 border border-nova-border rounded-lg overflow-hidden bg-nova-bg shadow-sm">
+              <div className="flex items-center justify-between px-3 py-1.5 bg-nova-bg-secondary border-b border-nova-border">
                 <span className="text-[10px] text-nova-text-muted font-mono uppercase">{match[1]}</span>
                 {match[1].toLowerCase() === 'sql' && (
                   <button
@@ -1293,7 +1606,7 @@ function FormattedMessage({ content }: { content: string }) {
                       executeQuery(String(children).replace(/\n$/, ''))
                       window.dispatchEvent(new CustomEvent('ezek:open-sql-tab'))
                     }}
-                    className="flex items-center gap-1 px-2 py-0.5 bg-nova-accent/10 hover:bg-nova-accent hover:text-white text-nova-accent text-[10px] rounded transition-colors"
+                    className="flex items-center gap-1 px-2 py-0.5 bg-nova-accent/10 hover:bg-nova-accent hover:text-nova-statusbar-text text-nova-accent text-[10px] rounded transition-colors"
                   >
                     <Play size={10} /> Executar
                   </button>
@@ -1311,23 +1624,23 @@ function FormattedMessage({ content }: { content: string }) {
               />
             </div>
           ) : (
-            <code {...props} className="bg-[#13211c] px-1.5 py-0.5 rounded text-[12px] font-mono text-nova-accent border border-[#22c55e]/10 break-words whitespace-pre-wrap">
+            <code {...props} className="bg-nova-accent/10 px-1.5 py-0.5 rounded text-[12px] font-mono text-nova-accent border border-nova-accent/20 break-words whitespace-pre-wrap">
               {children}
             </code>
           )
         },
-        p: ({children}) => <p className="mb-3 leading-relaxed text-[#f3f4f6] break-words">{children}</p>,
-        ul: ({children}) => <ul className="list-disc pl-5 mb-3 space-y-1 text-[#f3f4f6] marker:text-nova-accent">{children}</ul>,
-        ol: ({children}) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-[#f3f4f6] marker:text-nova-accent">{children}</ol>,
+        p: ({children}) => <p className="mb-3 leading-relaxed text-nova-text break-words last:mb-0">{children}</p>,
+        ul: ({children}) => <ul className="list-disc pl-5 mb-3 space-y-1 text-nova-text marker:text-nova-accent">{children}</ul>,
+        ol: ({children}) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-nova-text marker:text-nova-accent">{children}</ol>,
         li: ({children}) => <li>{children}</li>,
-        h1: ({children}) => <h1 className="text-xl font-bold mb-3 text-white mt-4">{children}</h1>,
-        h2: ({children}) => <h2 className="text-lg font-bold mb-3 text-white mt-3">{children}</h2>,
-        h3: ({children}) => <h3 className="text-base font-bold mb-2 text-white mt-2">{children}</h3>,
+        h1: ({children}) => <h1 className="text-xl font-bold mb-3 text-nova-text mt-4">{children}</h1>,
+        h2: ({children}) => <h2 className="text-lg font-bold mb-3 text-nova-text mt-3">{children}</h2>,
+        h3: ({children}) => <h3 className="text-base font-bold mb-2 text-nova-text mt-2">{children}</h3>,
         a: ({children, href}) => <a href={href} className="text-nova-accent hover:underline" target="_blank" rel="noreferrer">{children}</a>,
-        table: ({children}) => <div className="overflow-x-auto mb-3"><table className="min-w-full divide-y divide-[#152b21] border border-[#152b21] rounded-lg">{children}</table></div>,
-        thead: ({children}) => <thead className="bg-[#13211c]">{children}</thead>,
+        table: ({children}) => <div className="overflow-x-auto mb-3"><table className="min-w-full divide-y divide-nova-border border border-nova-border rounded-lg">{children}</table></div>,
+        thead: ({children}) => <thead className="bg-nova-bg-secondary">{children}</thead>,
         th: ({children}) => <th className="px-3 py-2 text-left text-xs font-medium text-nova-text-secondary uppercase tracking-wider">{children}</th>,
-        td: ({children}) => <td className="px-3 py-2 whitespace-nowrap text-sm text-[#f3f4f6] border-t border-[#152b21]">{children}</td>,
+        td: ({children}) => <td className="px-3 py-2 whitespace-nowrap text-sm text-nova-text border-t border-nova-border">{children}</td>,
       }}
     >
       {content}

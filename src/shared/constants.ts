@@ -16,6 +16,10 @@ export const IPC_CHANNELS = {
   AI_LIST_KIMIPROXY_MODELS: 'ai:listKimiProxyModels',
   AI_CHECK_KIMIPROXY: 'ai:checkKimiProxy',
   AI_INSTALL_KIMIPROXY: 'ai:installKimiProxy',
+  AI_LIST_GEMINIPROXY_MODELS: 'ai:listGeminiProxyModels',
+  AI_CHECK_GEMINIPROXY: 'ai:checkGeminiProxy',
+  AI_INSTALL_GEMINIPROXY: 'ai:installGeminiProxy',
+  AI_UNINSTALL_PROXY: 'ai:uninstallProxy',
   AI_START_PROXY: 'ai:startProxy',
   AI_STOP_PROXY: 'ai:stopProxy',
 
@@ -41,6 +45,7 @@ export const IPC_CHANNELS = {
   
   // SQL
   SQL_TEST_CONNECTION: 'sql:testConnection',
+  SQL_TEST_REDIS_CONNECTION: 'sql:testRedisConnection',
   SQL_EXECUTE_QUERY: 'sql:executeQuery',
   SQL_GET_CACHE: 'sql:getCache',
   SQL_CANCEL_QUERY: 'sql:cancelQuery',

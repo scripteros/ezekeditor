@@ -105,7 +105,7 @@ export interface IPCApi {
   isGitRepo: (repoPath: string) => Promise<boolean>
   
   // Terminal
-  createTerminal: (shell?: string) => Promise<string>
+  createTerminal: (shell?: string, cwd?: string) => Promise<string>
   writeToTerminal: (terminalId: string, data: string) => Promise<void>
   resizeTerminal: (terminalId: string, cols: number, rows: number) => Promise<void>
   killTerminal: (terminalId: string) => Promise<void>
@@ -128,15 +128,27 @@ export interface IPCApi {
   aiGetFile: (filePath: string) => Promise<{ content: string; exists: boolean }>
   aiWriteFile: (filePath: string, content: string) => Promise<{ success: boolean }>
   aiListFiles: (dirPath: string) => Promise<any[]>
+  aiListModels: (baseUrl?: string) => Promise<string[]>
   aiListRouteWayModels: () => Promise<any[]>
   aiListOpenRouterModels: () => Promise<any[]>
-  aiStartVoiceServer: () => Promise<{ success: boolean; error?: string }>
-  aiListDeepsProxyModels: () => Promise<any[]>
-  aiCheckDeepsProxyInstalled: () => Promise<boolean>
+  onProxyStatusChange: (callback: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy', status: 'online' | 'offline' | 'error') => void) => () => void
+  aiStartProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
+  aiStopProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
   aiGetDeepSeekProxyStatus: () => Promise<{ ready: boolean; status: string; profileExists: boolean }>
   aiListKimiProxyModels: () => Promise<any[]>
   aiCheckKimiProxyInstalled: () => Promise<{ installed: boolean, path: string }>
   aiInstallKimiProxy: () => Promise<boolean>
+  aiListGeminiProxyModels: () => Promise<any[]>
+  aiCheckGeminiProxyInstalled: () => Promise<{ installed: boolean, path: string }>
+  aiInstallGeminiProxy: () => Promise<boolean>
+  aiUninstallProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
+
+  // SQL
+  sqlTestConnection: (config: any) => Promise<{ success: boolean; error?: string }>
+  sqlTestRedisConnection: (config: any) => Promise<{ success: boolean; error?: string }>
+  sqlExecuteQuery: (config: any, query: string) => Promise<any>
+  sqlGetCache: (config: any) => Promise<any[]>
+  sqlCancelQuery: (config: any) => Promise<void>
   
   // OS
   osShowItemInFolder: (path: string) => Promise<void>

@@ -28,6 +28,8 @@ interface AIState {
   pendingChanges: AIFileChange[]
   routeWayModels: RouteWayModel[]
   isLoadingModels: boolean
+  ollamaModels: RouteWayModel[]
+  isLoadingOllamaModels: boolean
   openRouterModels: RouteWayModel[]
   isLoadingOpenRouterModels: boolean
   deepsproxyModels: RouteWayModel[]
@@ -36,12 +38,23 @@ interface AIState {
   kimiproxyModels: RouteWayModel[]
   isLoadingKimiProxyModels: boolean
   isKimiProxyInstalled: boolean
-  deepsProxyStatus: 'online' | 'offline' | 'error'
-  kimiProxyStatus: 'online' | 'offline' | 'error'
+  geminiproxyModels: RouteWayModel[]
+  isLoadingGeminiProxyModels: boolean
+  isGeminiProxyInstalled: boolean
+  deepsProxyStatus: 'online' | 'offline' | 'starting' | 'error'
+  kimiProxyStatus: 'online' | 'offline' | 'starting' | 'error'
+  geminiProxyStatus: 'online' | 'offline' | 'starting' | 'error'
   savedConfigs: SavedConfig[]
   chatHistories: Record<string, AIMessage[]>
-  currentChatId: string
   panelWidth: number
+  acquiredProxies: string[]
+  enabledAIProviders: string[]
+  acquireProxy: (id: string) => void
+  releaseProxy: (id: string) => void
+  enableAIProvider: (id: string) => void
+  disableAIProvider: (id: string) => void
+  stopProxy: (id: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
+  uninstallProxy: (id: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
 
   addMessage: (msg: AIMessage) => void
   appendMessageContent: (id: string, text: string) => void
@@ -58,6 +71,8 @@ interface AIState {
   clearPendingChanges: () => void
   fetchRouteWayModels: () => Promise<void>
   selectRouteWayModel: (modelId: string) => void
+  fetchOllamaModels: () => Promise<void>
+  selectOllamaModel: (modelId: string) => void
   fetchOpenRouterModels: () => Promise<void>
   selectOpenRouterModel: (modelId: string) => void
   fetchDeepsProxyModels: () => Promise<void>
@@ -66,7 +81,10 @@ interface AIState {
   fetchKimiProxyModels: () => Promise<void>
   selectKimiProxyModel: (modelId: string) => void
   checkKimiProxyInstalled: () => Promise<void>
-  setProxyStatus: (proxyType: 'deepsproxy' | 'kimiproxy', status: 'online' | 'offline' | 'error') => void
+  fetchGeminiProxyModels: () => Promise<void>
+  selectGeminiProxyModel: (modelId: string) => void
+  checkGeminiProxyInstalled: () => Promise<void>
+  setProxyStatus: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy', status: 'online' | 'offline' | 'starting' | 'error') => void
   saveConfig: (name: string) => void
   loadConfig: (configId: string) => void
   deleteConfig: (configId: string) => void
@@ -76,6 +94,9 @@ interface AIState {
   createNewChat: () => void
   clearChat: () => void
   revertMessageChanges: (messageId: string) => Promise<void>
+  checkGeminiProxyInstalled: () => Promise<void>
+  checkKimiProxyInstalled: () => Promise<void>
+  checkDeepsProxyInstalled: () => Promise<void>
 }
 
 const DEFAULT_CONFIG: AIConfig = {
@@ -94,6 +115,8 @@ function generateId(): string {
 const STORAGE_KEY_CONFIGS = 'ezek_ai_configs'
 const STORAGE_KEY_CHATS = 'ezek_ai_chats'
 const STORAGE_KEY_ACTIVE_CONFIG = 'ezek_ai_active_config'
+
+type AIProviderId = AIConfig['provider']
 
 function loadSavedConfigs(): SavedConfig[] {
   try {
@@ -114,6 +137,75 @@ function loadActiveConfig(): AIConfig | null {
     const stored = localStorage.getItem(STORAGE_KEY_ACTIVE_CONFIG)
     return stored ? JSON.parse(stored) : null
   } catch { return null }
+}
+
+function providerDefaults(provider: AIProviderId): Partial<AIConfig> {
+  if (provider === 'ollama') return { provider, baseUrl: 'http://localhost:11434', model: '' }
+  if (provider === 'openai') return { provider, baseUrl: 'https://api.openai.com/v1', model: '' }
+  if (provider === 'routeway') return { provider, baseUrl: 'https://api.routeway.ai/v1', model: '' }
+  if (provider === 'openrouter') return { provider, baseUrl: 'https://openrouter.ai/api/v1', model: '' }
+  if (provider === 'custom') return { provider, model: '' }
+  if (provider === 'codebuff') return { provider, model: '' }
+  if (provider === 'deepsproxy' || provider === 'kimiproxy' || provider === 'geminiproxy') {
+    return { provider, baseUrl: 'http://localhost:3000/v1', model: '' }
+  }
+  return { provider, model: '' }
+}
+
+async function buildRedisMemoryContext(): Promise<string> {
+  const api = getApi()
+  if (!api || !(api as any).sqlGetCache) return ''
+
+  const { connections, redisServers, activeRedisServerId } = useSqlStore.getState()
+  const activeRedis = redisServers.find(server => server.id === activeRedisServerId)
+  const redisConnections = activeRedis
+    ? connections.map(conn => ({
+      ...conn,
+      redisEnabled: true,
+      redisMode: activeRedis.redisMode,
+      redisUrl: activeRedis.redisUrl,
+      redisHost: activeRedis.redisHost,
+      redisPort: activeRedis.redisPort,
+      redisUsername: activeRedis.redisUsername,
+      redisPassword: activeRedis.redisPassword,
+      redisDatabase: activeRedis.redisDatabase,
+      redisTls: activeRedis.redisTls,
+    }))
+    : connections.filter(conn => conn.redisEnabled || conn.redisUrl || conn.redisHost)
+  if (redisConnections.length === 0) return ''
+
+  const memoryBlocks: string[] = []
+
+  for (const conn of redisConnections) {
+    try {
+      const entries = await (api as any).sqlGetCache(conn)
+      if (!entries || entries.length === 0) continue
+
+      const lines = entries.slice(0, 40).map((entry: any, index: number) => {
+        const columns = Array.isArray(entry.columns) ? entry.columns.join(', ') : 'sem colunas'
+        const types = entry.columnTypes && typeof entry.columnTypes === 'object'
+          ? Object.entries(entry.columnTypes).map(([name, type]) => `${name}:${type}`).join(', ')
+          : ''
+        const date = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'sem data'
+        return [
+          `Memória ${index + 1} (${date})`,
+          `Banco: ${entry.provider || conn.provider} / ${entry.database || conn.database || 'sem database'}`,
+          `Linhas: ${entry.rowCount ?? 'N/A'}`,
+          `Colunas: ${columns}`,
+          types ? `Tipos: ${types}` : '',
+          `Query:\n\`\`\`sql\n${entry.query || ''}\n\`\`\``
+        ].filter(Boolean).join('\n')
+      })
+
+      memoryBlocks.push(`Conexão "${conn.name}" (${conn.provider.toUpperCase()}):\n${lines.join('\n\n')}`)
+    } catch (err) {
+      console.error('Failed to inject Redis memory', err)
+    }
+  }
+
+  if (memoryBlocks.length === 0) return ''
+
+  return `\n\n[MEMÓRIA REDIS DA IA - expiração automática em 7 dias]:\nUse esta memória em qualquer conversa para lembrar consultas, colunas, tipos de campos e estrutura observada nos bancos configurados. Servidor Redis ativo: ${activeRedis?.name || 'legado da conexão SQL'}.\n\n${memoryBlocks.join('\n\n---\n\n')}\n`
 }
 
 // Function to clean and process Codebuff responses
@@ -172,6 +264,8 @@ export const useAIStore = create<AIState>((set, get) => ({
   pendingChanges: [],
   routeWayModels: [],
   isLoadingModels: false,
+  ollamaModels: [],
+  isLoadingOllamaModels: false,
   openRouterModels: [],
   isLoadingOpenRouterModels: false,
   deepsproxyModels: [],
@@ -180,12 +274,115 @@ export const useAIStore = create<AIState>((set, get) => ({
   kimiproxyModels: [],
   isLoadingKimiProxyModels: false,
   isKimiProxyInstalled: false,
+  geminiproxyModels: [],
+  isLoadingGeminiProxyModels: false,
+  isGeminiProxyInstalled: false,
   deepsProxyStatus: 'offline',
   kimiProxyStatus: 'offline',
+  geminiProxyStatus: 'offline',
   savedConfigs: loadSavedConfigs() || [],
   chatHistories: initialHistories,
   currentChatId: initialChatId,
   panelWidth: 320,
+  acquiredProxies: (() => {
+    try {
+      const stored = localStorage.getItem('ezek_acquired_proxies')
+      return stored ? JSON.parse(stored) : []
+    } catch { return [] }
+  })(),
+  enabledAIProviders: (() => {
+    try {
+      const stored = localStorage.getItem('ezek_enabled_ai_providers')
+      return stored ? JSON.parse(stored) : []
+    } catch { return [] }
+  })(),
+
+  acquireProxy: (id) => {
+    set(state => {
+      const updated = [...new Set([...state.acquiredProxies, id])]
+      try {
+        localStorage.setItem('ezek_acquired_proxies', JSON.stringify(updated))
+      } catch {}
+      return { acquiredProxies: updated }
+    })
+  },
+
+  releaseProxy: (id) => {
+    set(state => {
+      const updated = state.acquiredProxies.filter(proxyId => proxyId !== id)
+      try {
+        localStorage.setItem('ezek_acquired_proxies', JSON.stringify(updated))
+      } catch {}
+      return { acquiredProxies: updated }
+    })
+  },
+
+  enableAIProvider: (id) => {
+    set(state => {
+      const updated = [...new Set([...state.enabledAIProviders, id])]
+      try {
+        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updated))
+      } catch {}
+      return { enabledAIProviders: updated }
+    })
+
+    get().setConfig(providerDefaults(id as AIProviderId))
+  },
+
+  disableAIProvider: (id) => {
+    set(state => {
+      const updated = state.enabledAIProviders.filter(providerId => providerId !== id)
+      try {
+        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updated))
+      } catch {}
+      return { enabledAIProviders: updated }
+    })
+
+    if (get().config.provider === id) {
+      get().setConfig({ provider: 'custom' as any, model: '' })
+    }
+  },
+
+  stopProxy: async (id) => {
+    const api = getApi()
+    if (!api) return false
+
+    try {
+      const success = await api.aiStopProxy(id)
+      get().setProxyStatus(id, success ? 'offline' : 'error')
+      return success
+    } catch {
+      get().setProxyStatus(id, 'error')
+      return false
+    }
+  },
+
+  uninstallProxy: async (id) => {
+    const api = getApi()
+    if (!api || !(api as any).aiUninstallProxy) return false
+
+    try {
+      await api.aiStopProxy(id)
+    } catch {}
+
+    const success = await (api as any).aiUninstallProxy(id)
+    if (!success) return false
+
+    get().releaseProxy(id)
+    get().disableAIProvider(id)
+    get().setProxyStatus(id, 'offline')
+
+    if (id === 'deepsproxy') set({ isDeepsProxyInstalled: false })
+    if (id === 'kimiproxy') set({ isKimiProxyInstalled: false })
+    if (id === 'geminiproxy') set({ isGeminiProxyInstalled: false })
+
+    const currentProvider = get().config.provider
+    if (currentProvider === id) {
+      get().setConfig({ provider: 'routeway', model: '' })
+    }
+
+    return true
+  },
 
   addMessage: (msg) => {
     set(state => ({ messages: [...state.messages, msg] }))
@@ -203,6 +400,17 @@ export const useAIStore = create<AIState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify({ ...get().config, ...partial }))
     } catch {}
+
+    const selectedProvider = partial.provider
+    if (selectedProvider === 'deepsproxy' || selectedProvider === 'kimiproxy' || selectedProvider === 'geminiproxy') {
+      const api = getApi()
+      if (api) {
+        get().setProxyStatus(selectedProvider, 'starting' as any)
+        api.aiStartProxy(selectedProvider)
+          .then(success => get().setProxyStatus(selectedProvider, success ? 'online' : 'error'))
+          .catch(() => get().setProxyStatus(selectedProvider, 'error'))
+      }
+    }
   },
 
   sendMessage: async (content: string, attachments?: AIAttachment[], isHiddenSystemMessage = false) => {
@@ -255,6 +463,11 @@ export const useAIStore = create<AIState>((set, get) => ({
         }
       }
 
+      const redisMemoryContext = await buildRedisMemoryContext()
+      if (redisMemoryContext) {
+        messageContent += redisMemoryContext
+      }
+
       // Adicionar contexto SQL se for relevante
       const { activeFileId, openFiles } = useEditorStore.getState()
       const activeFile = openFiles.find(f => f.id === activeFileId)
@@ -265,18 +478,6 @@ export const useAIStore = create<AIState>((set, get) => ({
           if (activeConn) {
             messageContent += `\n\n[INFORMAÇÃO IMPORTANTE]: O banco de dados alvo desta operação é: **${activeConn.provider.toUpperCase()}**.\n`
             
-            // Try fetching from Redis cache
-            try {
-              const cacheHistory = await (window as any).api.sqlGetCache(activeConn)
-              if (cacheHistory && cacheHistory.length > 0) {
-                messageContent += `\n[Contexto Estrutural - Histórico do Redis]:\nAbaixo estão as últimas queries executadas e as colunas retornadas, use isso para entender a estrutura, os nomes de tabelas, campos e funções:\n`
-                cacheHistory.forEach((entry: any, i: number) => {
-                  messageContent += `\nQuery ${i + 1}:\n\`\`\`sql\n${entry.query}\n\`\`\`\nColunas mapeadas: ${entry.columns.join(', ')}\n`
-                })
-              }
-            } catch (err) {
-              console.error('Failed to inject Redis cache', err)
-            }
           }
 
           if (queryResults[activeConnectionId]) {
@@ -293,7 +494,8 @@ export const useAIStore = create<AIState>((set, get) => ({
             messageContent += `\n\n[AGENTE SQL ATIVADO]: Você tem permissão para consultar o banco de dados de forma autônoma para resolver o problema do usuário.
 Se você precisar buscar dados ou investigar a estrutura, use a action: {"type": "execute_sql", "query": "SEU SQL AQUI"}.
 Eu vou executar o SQL silenciosamente e te devolver o resultado. Você pode fazer isso quantas vezes quiser até obter todos os dados necessários.
-Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Não mostre os códigos SQL executados na sua resposta final, apenas os dados e a explicação. O sistema irá anexar o SQL no final automaticamente.`;
+Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Não mostre os códigos SQL executados na sua resposta final, apenas os dados e a explicação. O sistema irá anexar o SQL no final automaticamente.
+Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você tem permissão para consultar. Execute as consultas necessárias, analise o resultado e só então conclua.`;
           }
         }
       }
@@ -434,10 +636,11 @@ Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Nã
                   if (!isSelectOnly) {
                     actionFeedback += `\n[SQL Execution Blocked]: Ação bloqueada pelas políticas de segurança. A IA só possui permissão para executar comandos SELECT de forma autônoma. Para comandos que alteram dados (UPDATE, INSERT, DELETE, ALTER), você deve apenas mostrar a query no chat e pedir para o usuário executar e aprovar manualmente.\n`
                   } else {
-                    const { activeConnectionId, connections } = useSqlStore.getState()
+                    const { activeConnectionId, connections, executeQuery } = useSqlStore.getState()
                     const activeConn = connections.find(c => c.id === activeConnectionId)
                     if (activeConn) {
-                      const result = await (window as any).api.sqlExecuteQuery(activeConn, action.query)
+                      const result = await executeQuery(action.query)
+                      window.dispatchEvent(new CustomEvent('ezek:open-sql-tab'))
                       if (result.success) {
                         actionFeedback += `\n[SQL Execution Success]:\nRows affected/returned: ${result.rowCount}\nData (first 50 rows max):\n\`\`\`json\n${JSON.stringify(result.rows?.slice(0, 50), null, 2)}\n\`\`\`\n`
                       } else {
@@ -487,7 +690,7 @@ Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Nã
               // Agentic Loop: Enviar o feedback de volta para a IA silenciosamente
               if (actionFeedback.trim().length > 0) {
                 setTimeout(() => {
-                  const prompt = `[SYSTEM AUTO-FEEDBACK] Resultado das suas ações:\n${actionFeedback}\n\nSe houve erros, corrija-os e tente novamente. Se você leu um arquivo com sucesso, use as informações para continuar seu trabalho. Se tudo deu certo, você pode finalizar a tarefa. Lembre-se de sempre responder no formato JSON válido.`;
+                  const prompt = `[SYSTEM AUTO-FEEDBACK] Resultado das suas ações:\n${actionFeedback}\n\nContinue a tarefa até concluir. Se houve erros, corrija-os e tente novamente. Se você leu um arquivo ou executou SQL com sucesso, use as informações para continuar seu trabalho. Se tudo deu certo, finalize com uma conclusão clara do que foi feito e do resultado obtido. Responda no formato JSON válido somente se ainda precisar executar novas ações; se a tarefa estiver concluída, responda em texto normal.`;
                   get().sendMessage(prompt, undefined, true);
                 }, 800);
               }
@@ -531,10 +734,7 @@ Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Nã
     set({ showDiff: show })
   },
 
-  setProxyStatus: (proxyType, status) => {
-    if (proxyType === 'deepsproxy') set({ deepsProxyStatus: status })
-    if (proxyType === 'kimiproxy') set({ kimiProxyStatus: status })
-  },
+
   addPlanStep: (step) => { set(state => ({ activePlanSteps: [...state.activePlanSteps, step] })) },
   updatePlanStep: (id, updates) => { set(state => ({ activePlanSteps: state.activePlanSteps.map(s => s.id === id ? { ...s, ...updates } : s) })) },
   clearPlan: () => { set({ activePlanSteps: [] }) },
@@ -558,6 +758,31 @@ Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Nã
   },
 
   selectRouteWayModel: (modelId) => {
+    get().setConfig({ model: modelId })
+  },
+
+  fetchOllamaModels: async () => {
+    const api = getApi()
+    if (!api || !(api as any).aiListModels) return
+    set({ isLoadingOllamaModels: true })
+    try {
+      const models: string[] = await (api as any).aiListModels(get().config.baseUrl || 'http://localhost:11434')
+      const formatted = models.map(model => ({
+        id: model,
+        name: model,
+        free: true,
+        description: 'Modelo local do Ollama',
+      }))
+      set({ ollamaModels: formatted, isLoadingOllamaModels: false })
+      if (formatted.length > 0 && !get().config.model) {
+        get().setConfig({ model: formatted[0].id })
+      }
+    } catch {
+      set({ isLoadingOllamaModels: false })
+    }
+  },
+
+  selectOllamaModel: (modelId) => {
     get().setConfig({ model: modelId })
   },
 
@@ -607,6 +832,7 @@ Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Nã
     try {
       const { installed, path } = await (api as any).aiCheckDeepsProxy()
       set({ isDeepsProxyInstalled: installed })
+      if (installed) get().acquireProxy('deepsproxy')
       if (installed && !get().config.deepsproxyPath) {
         get().setConfig({ deepsproxyPath: path })
       }
@@ -639,10 +865,50 @@ Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Nã
     try {
       const { installed, path } = await (api as any).aiCheckKimiProxyInstalled()
       set({ isKimiProxyInstalled: installed })
+      if (installed) get().acquireProxy('kimiproxy')
       if (installed && !get().config.kimiproxyPath) {
         get().setConfig({ kimiproxyPath: path })
       }
     } catch {}
+  },
+
+  fetchGeminiProxyModels: async () => {
+    const api = getApi()
+    if (!api) return
+    set({ isLoadingGeminiProxyModels: true })
+    try {
+      const models: RouteWayModel[] = await (api as any).aiListGeminiProxyModels()
+      set({ geminiproxyModels: models, isLoadingGeminiProxyModels: false })
+      const freeModels = models.filter(m => m.free)
+      if (freeModels.length > 0 && !get().config.model) {
+        set(state => ({ config: { ...state.config, model: freeModels[0].id } }))
+      }
+    } catch {
+      set({ isLoadingGeminiProxyModels: false })
+    }
+  },
+
+  selectGeminiProxyModel: (modelId) => {
+    get().setConfig({ model: modelId })
+  },
+
+  checkGeminiProxyInstalled: async () => {
+    const api = getApi()
+    if (!api) return
+    try {
+      const { installed, path } = await (api as any).aiCheckGeminiProxyInstalled()
+      set({ isGeminiProxyInstalled: installed })
+      if (installed) get().acquireProxy('geminiproxy')
+      if (installed && !get().config.geminiproxyPath) {
+        get().setConfig({ geminiproxyPath: path })
+      }
+    } catch {}
+  },
+
+  setProxyStatus: (proxyType, status) => {
+    if (proxyType === 'deepsproxy') set({ deepsProxyStatus: status })
+    else if (proxyType === 'kimiproxy') set({ kimiProxyStatus: status })
+    else if (proxyType === 'geminiproxy') set({ geminiProxyStatus: status })
   },
 
   saveCurrentConfig: () => {

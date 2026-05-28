@@ -1,4 +1,4 @@
-import { Files, Search, GitFork, Sun, Moon, Puzzle, Network } from 'lucide-react'
+import { Files, Search, GitFork, Sun, Moon, Store, Network, Settings } from 'lucide-react'
 import { useSidebarStore } from '../../store/sidebarStore'
 import { useThemeStore } from '../../store/themeStore'
 import { useGitStore } from '../../store/gitStore'
@@ -11,7 +11,7 @@ const activities = [
   { id: 'search', icon: Search, label: 'Pesquisar' },
   { id: 'git', icon: GitFork, label: 'Git' },
   { id: 'ldap', icon: Network, label: 'LDAP / AD' },
-  { id: 'extensions', icon: Puzzle, label: 'Extensões de IA' },
+  { id: 'extensions', icon: Store, label: 'Marketplace' },
 ] as const
 
 export default function ActivityBar() {
@@ -72,6 +72,20 @@ export default function ActivityBar() {
           {isDark ? <Sun size={20} /> : <Moon size={20} />}
         </button>
         <AIActivityButton />
+        <button
+          title="Configurações"
+          onClick={() => setActiveView('settings')}
+          className={`w-10 h-10 flex items-center justify-center rounded transition-all relative ${
+            activeView === 'settings'
+              ? 'text-nova-accent bg-nova-hover'
+              : 'text-nova-text-muted hover:text-nova-text hover:bg-nova-hover'
+          }`}
+        >
+          {activeView === 'settings' && (
+            <div className="absolute left-0 w-[2px] h-5 bg-nova-accent rounded-r-full" />
+          )}
+          <Settings size={20} />
+        </button>
       </div>
     </div>
   )

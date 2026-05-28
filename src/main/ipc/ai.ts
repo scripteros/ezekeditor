@@ -17,16 +17,39 @@ const codebuffSessions: Record<string, any> = {}
 
 let deepsProxyProcess: ChildProcess | null = null
 let kimiProxyProcess: ChildProcess | null = null
+let geminiProxyProcess: ChildProcess | null = null
 
-function emitProxyStatus(proxyType: 'deepsproxy' | 'kimiproxy', status: 'online' | 'offline' | 'error') {
+function killProxyProcess(child: ChildProcess | null) {
+  if (!child) return
+  if (process.platform === 'win32' && child.pid) {
+    spawn('taskkill', ['/pid', child.pid.toString(), '/t'])
+  } else {
+    child.kill()
+  }
+}
+
+function emitProxyStatus(proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy', status: 'online' | 'offline' | 'error') {
   const wins = BrowserWindow.getAllWindows()
   if (wins.length > 0) {
     wins[0].webContents.send('ai:proxyStatusChange', proxyType, status)
   }
 }
 
-async function queryOllama(model: string, prompt: string, signal: AbortSignal): Promise<string> {
-  const response = await fetch('http://localhost:11434/api/generate', {
+function getProxyProcess(proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') {
+  if (proxyType === 'deepsproxy') return deepsProxyProcess
+  if (proxyType === 'kimiproxy') return kimiProxyProcess
+  return geminiProxyProcess
+}
+
+function clearProxyProcess(proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') {
+  if (proxyType === 'deepsproxy') deepsProxyProcess = null
+  else if (proxyType === 'kimiproxy') kimiProxyProcess = null
+  else geminiProxyProcess = null
+}
+
+async function queryOllama(baseUrl: string, model: string, prompt: string, signal: AbortSignal): Promise<string> {
+  const cleanBaseUrl = (baseUrl || 'http://localhost:11434').replace(/\/+$/, '')
+  const response = await fetch(`${cleanBaseUrl}/api/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, prompt, stream: false }),
@@ -75,10 +98,45 @@ async function queryOpenAI(config: { baseUrl: string; apiKey: string; model: str
   return data.choices?.[0]?.message?.content || 'No response'
 }
 
-export function registerAiHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.AI_LIST_MODELS, async () => {
+async function queryOpenAIChat(config: { baseUrl: string; apiKey: string; model: string }, messages: { role: string; content: string }[], signal: AbortSignal): Promise<string> {
+  const baseUrl = config.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'User-Agent': 'OpenAI/NodeJS/4.0.0',
+      'Authorization': `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages,
+      temperature: 0.3,
+    }),
+    signal,
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
     try {
-      const response = await fetch('http://localhost:11434/api/tags')
+      const errorJson = JSON.parse(text)
+      const errorMsg = errorJson.error?.message || errorJson.error?.metadata?.raw || text
+      throw new Error(`API Error (${response.status}): ${errorMsg}`)
+    } catch {
+      throw new Error(`API Error (${response.status}): ${text}`)
+    }
+  }
+
+  const data = await response.json()
+  return data.choices?.[0]?.message?.content || 'No response'
+}
+
+
+export function registerAiHandlers(): void {
+  ipcMain.handle(IPC_CHANNELS.AI_LIST_MODELS, async (_event, baseUrl?: string) => {
+    try {
+      const cleanBaseUrl = (baseUrl || 'http://localhost:11434').replace(/\/+$/, '')
+      const response = await fetch(`${cleanBaseUrl}/api/tags`)
       const data = await response.json()
       return data.models?.map((m: any) => m.name) || []
     } catch {
@@ -266,8 +324,9 @@ IMPORTANT: You MUST respond EXCLUSIVELY in valid JSON format when you want to ex
 }
 If you DO NOT need to execute any actions, you can just return normal text/markdown without JSON. But if you need to read files, run commands, or edit code, you MUST wrap everything (including your message) inside the JSON object shown above.
 
-IMPORTANTE: Você DEVE se identificar como 'Ezek' e responder em português do Brasil.
-REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja extremamente direto, conciso e minimalista nas suas respostas. Se o usuário disser apenas 'oi', responda apenas com um cumprimento amigável e breve, sem textões.`
+IMPORTANTE: Responda em português do Brasil. Não fique repetindo seu nome ou se apresentando em toda mensagem; só mencione o nome Ezek se o usuário perguntar quem você é ou se isso for realmente necessário.
+REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja extremamente direto, conciso e minimalista nas suas respostas. Se o usuário disser apenas 'oi', responda apenas com um cumprimento amigável e breve, sem textões.
+PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de ponta a ponta ou até encontrar um bloqueio real que precise de ação do usuário. Não pare após análise parcial. Depois de executar ações, use o feedback para corrigir erros, continuar os próximos passos e retornar uma conclusão clara do que foi feito.`
 
     let workspaceContext = '';
     if (workspacePath) {
@@ -282,29 +341,45 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
 
     const fullPrompt = `${systemPrompt}${workspaceContext}\n\nProject context: ${JSON.stringify(history.slice(-10))}\n\nUser: ${message}\n\nAssistant:`
 
-    if (config.provider === 'routeway' || config.provider === 'openrouter' || config.provider === 'deepsproxy' || config.provider === 'kimiproxy' || config.provider === 'ds2api') {
+    if (config.provider === 'routeway' || config.provider === 'openrouter' || config.provider === 'deepsproxy' || config.provider === 'kimiproxy' || config.provider === 'geminiproxy' || config.provider === 'custom' || config.provider === 'openai') {
       try {
         let baseUrl = 'https://api.routeway.ai/v1'
         if (config.provider === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1'
-        if (config.provider === 'deepsproxy') baseUrl = 'http://localhost:3002/v1'
-        if (config.provider === 'kimiproxy') baseUrl = 'http://localhost:3001/v1'
-        if (config.provider === 'ds2api') baseUrl = config.baseUrl || 'http://localhost:8080/v1'
+        if (config.provider === 'openai') baseUrl = config.baseUrl || 'https://api.openai.com/v1'
+        if (config.provider === 'deepsproxy') baseUrl = 'http://localhost:3000/v1'
+        if (config.provider === 'kimiproxy') baseUrl = 'http://localhost:3000/v1'
+        if (config.provider === 'geminiproxy') baseUrl = 'http://localhost:3000/v1'
+        if (config.provider === 'custom') baseUrl = config.baseUrl || baseUrl
 
-        const response = await queryOpenAI({
+        const chatMessages = [
+          { role: 'system', content: systemPrompt },
+        ];
+        if (workspaceContext) {
+          chatMessages.push({ role: 'system', content: workspaceContext });
+        }
+        for (const h of history.slice(-10)) {
+          chatMessages.push({
+            role: h.role === 'assistant' ? 'assistant' : 'user',
+            content: typeof h.content === 'string' ? h.content : JSON.stringify(h.content)
+          });
+        }
+        chatMessages.push({ role: 'user', content: message });
+
+        const response = await queryOpenAIChat({
           baseUrl,
           apiKey: config.apiKey || 'sk-no-key-required',
           model: config.model,
-        }, fullPrompt, signal)
+        }, chatMessages, signal)
         return response
       } catch (err: any) {
         if (err.name === 'AbortError') return 'Request cancelled'
-        const providerName = config.provider === 'routeway' ? 'RouteWay' : config.provider === 'openrouter' ? 'OpenRouter' : config.provider === 'ds2api' ? 'ds2api' : config.provider === 'kimiproxy' ? 'KimiProxy' : 'DeepsProxy'
+        const providerName = config.provider === 'routeway' ? 'RouteWay' : config.provider === 'openrouter' ? 'OpenRouter' : config.provider === 'openai' ? 'OpenAI' : config.provider === 'kimiproxy' ? 'KimiProxy' : config.provider === 'geminiproxy' ? 'GeminiProxy' : config.provider === 'custom' ? 'Custom API' : 'DeepsProxy'
         throw new Error(`${providerName}: ${err.message || 'Connection failed.'}`)
       }
     }
 
     try {
-      const response = await queryOllama(config.model, fullPrompt, signal)
+      const response = await queryOllama(config.baseUrl, config.model, fullPrompt, signal)
       return response
     } catch (err: any) {
       if (err.name === 'AbortError') return 'Request cancelled'
@@ -327,16 +402,22 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
 
   ipcMain.handle(IPC_CHANNELS.AI_TEST_CONNECTION, async (_event, config: any) => {
     try {
+      if (config.provider === 'codebuff') {
+        return { ok: Boolean(config.apiKey), error: config.apiKey ? undefined : 'Informe a chave da API Codebuff.' }
+      }
+
       if (config.provider === 'ollama') {
-        const response = await fetch(`${config.baseUrl}/api/tags`)
+        const cleanBaseUrl = (config.baseUrl || 'http://localhost:11434').replace(/\/+$/, '')
+        const response = await fetch(`${cleanBaseUrl}/api/tags`)
         return { ok: response.ok, error: response.ok ? undefined : 'Ollama não respondeu corretamente.' }
       }
       
-      let baseUrl = config.baseUrl
+      let baseUrl = config.baseUrl || 'https://api.openai.com/v1'
       if (config.provider === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1'
       if (config.provider === 'routeway') baseUrl = 'https://api.routeway.ai/v1'
-      if (config.provider === 'deepsproxy') baseUrl = 'http://localhost:3002/v1'
-      if (config.provider === 'kimiproxy') baseUrl = 'http://localhost:3001/v1'
+      if (config.provider === 'deepsproxy') baseUrl = 'http://localhost:3000/v1'
+      if (config.provider === 'kimiproxy') baseUrl = 'http://localhost:3000/v1'
+      if (config.provider === 'geminiproxy') baseUrl = 'http://localhost:3000/v1'
       
       const formattedBaseUrl = baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
       
@@ -482,7 +563,7 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
 
   ipcMain.handle(IPC_CHANNELS.AI_LIST_DEEPSPROXY_MODELS, async () => {
     try {
-      const response = await fetch('http://localhost:3002/v1/models', {
+      const response = await fetch('http://localhost:3000/v1/models', {
         headers: { 'Accept': 'application/json' },
         signal: AbortSignal.timeout(5000),
       })
@@ -495,8 +576,8 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
         free: true,
         description: `Local DeepsProxy Model: ${m.id}`,
       }))
-    } catch (err) {
-      console.error('Failed to fetch DeepsProxy models:', err)
+    } catch (err: any) {
+      if (err?.cause?.code !== 'ECONNREFUSED') console.error('Failed to fetch DeepsProxy models:', err?.message || err)
       return [
         { id: 'deepseek-v4-flash', name: 'Deepseek V4 Flash', free: true, description: 'Local proxy' },
         { id: 'deepseek-v4-flash-thinking', name: 'Deepseek V4 Flash Thinking', free: true, description: 'Local proxy with reasoning' },
@@ -560,7 +641,7 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
 
   ipcMain.handle(IPC_CHANNELS.AI_LIST_KIMIPROXY_MODELS, async () => {
     try {
-      const response = await fetch('http://localhost:3001/v1/models', {
+      const response = await fetch('http://localhost:3000/v1/models', {
         headers: { 'Accept': 'application/json' },
         signal: AbortSignal.timeout(5000),
       })
@@ -573,8 +654,8 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
         free: true,
         description: `Local KimiProxy Model: ${m.id}`,
       }))
-    } catch (err) {
-      console.error('Failed to fetch KimiProxy models:', err)
+    } catch (err: any) {
+      if (err?.cause?.code !== 'ECONNREFUSED') console.error('Failed to fetch KimiProxy models:', err?.message || err)
       return [
         { id: 'moonshot-v1-8k', name: 'Moonshot V1 8K', free: true, description: 'Local proxy' },
         { id: 'moonshot-v1-32k', name: 'Moonshot V1 32K', free: true, description: 'Local proxy' },
@@ -610,12 +691,13 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
 
       const commands = [
         `cd /d "${targetDir}"`,
-        `if exist kimiproxy (rmdir /s /q kimiproxy)`,
+        `rmdir /s /q kimiproxy 2>nul`,
         `git clone https://github.com/pedrofariasx/kimiproxy.git`,
         `cd kimiproxy`,
         `npm install`,
         `npx playwright install`
       ]
+      const commandString = commands[0] + ' & ' + commands[1] + ' & ' + commands.slice(2).join(' && ')
 
       const env = { ...process.env }
       const pathKey = Object.keys(env).find(k => k.toLowerCase() === 'path') || 'PATH'
@@ -624,7 +706,7 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
         env[pathKey] = `${currentPath};C:\\Program Files\\Git\\cmd`
       }
 
-      const child = spawn(commands.join(' && '), { cwd: targetDir, shell: true, env })
+      const child = spawn(commandString, { cwd: targetDir, shell: true, env })
       child.stdout.on('data', d => sendLog(d.toString()))
       child.stderr.on('data', d => sendLog(d.toString()))
       child.on('close', code => resolve(code === 0))
@@ -633,6 +715,116 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
         resolve(false)
       })
     })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.AI_LIST_GEMINIPROXY_MODELS, async () => {
+    try {
+      const response = await fetch('http://localhost:3000/v1/models', {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(5000),
+      })
+      const data = await response.json()
+      const allModels = data.data || []
+      
+      return allModels.map((m: any) => ({
+        id: m.id || m.name || '',
+        name: (m.id || '').toUpperCase().replace(/-/g, ' '),
+        free: true,
+        description: `Local GeminiProxy Model: ${m.id}`,
+      }))
+    } catch (err: any) {
+      if (err?.cause?.code !== 'ECONNREFUSED' && err?.cause?.code !== 'ECONNRESET') console.error('Failed to fetch GeminiProxy models:', err?.message || err)
+      return [
+        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', free: true, description: 'Local proxy' },
+        { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', free: true, description: 'Local proxy' },
+        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', free: true, description: 'Local proxy' },
+      ]
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.AI_CHECK_GEMINIPROXY, async () => {
+    try {
+      const home = os.homedir()
+      const targetDir = path.join(home, '.ezek-editor', 'geminiproxy')
+      const packageJsonPath = path.join(targetDir, 'package.json')
+      
+      const installed = fs.existsSync(packageJsonPath)
+      return { installed, path: targetDir }
+    } catch {
+      return { installed: false, path: '' }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.AI_INSTALL_GEMINIPROXY, async (event) => {
+    return new Promise((resolve) => {
+      const home = os.homedir()
+      const sendLog = (text: string) => {
+        event.sender.send('ai:installLog', text)
+      }
+
+      const targetDir = path.join(home, '.ezek-editor')
+      if (!fs.existsSync(targetDir)) {
+        try { fs.mkdirSync(targetDir, { recursive: true }) } catch (e) {}
+      }
+
+      const commands = [
+        `cd /d "${targetDir}"`,
+        `rmdir /s /q geminiproxy 2>nul`,
+        `git clone https://github.com/scripteros/geminiproxy.git`,
+        `cd geminiproxy`,
+        `npm install`,
+        `npx playwright install`
+      ]
+      const commandString = commands[0] + ' & ' + commands[1] + ' & ' + commands.slice(2).join(' && ')
+
+      const env = { ...process.env }
+      const pathKey = Object.keys(env).find(k => k.toLowerCase() === 'path') || 'PATH'
+      const currentPath = env[pathKey] || ''
+      if (process.platform === 'win32' && !currentPath.toLowerCase().includes('git\\cmd')) {
+        env[pathKey] = `${currentPath};C:\\Program Files\\Git\\cmd`
+      }
+
+      const child = spawn(commandString, { cwd: targetDir, shell: true, env })
+      child.stdout.on('data', d => sendLog(d.toString()))
+      child.stderr.on('data', d => sendLog(d.toString()))
+      child.on('close', code => resolve(code === 0))
+      child.on('error', err => {
+        sendLog(`Error: ${err.message}`)
+        resolve(false)
+      })
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.AI_UNINSTALL_PROXY, async (_event, proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => {
+    try {
+      const allowed = new Set(['deepsproxy', 'kimiproxy', 'geminiproxy'])
+      if (!allowed.has(proxyType)) return false
+
+      const runningProcess = getProxyProcess(proxyType)
+      if (runningProcess) {
+        killProxyProcess(runningProcess)
+        clearProxyProcess(proxyType)
+      }
+
+      try {
+        await fetch('http://localhost:3000/shutdown', { method: 'POST', signal: AbortSignal.timeout(1500) }).catch(() => {})
+      } catch {}
+
+      const baseDir = path.join(os.homedir(), '.ezek-editor')
+      const targetDir = path.resolve(baseDir, proxyType)
+      const resolvedBase = path.resolve(baseDir)
+      if (!targetDir.startsWith(resolvedBase + path.sep)) return false
+
+      if (fs.existsSync(targetDir)) {
+        fs.rmSync(targetDir, { recursive: true, force: true })
+      }
+
+      emitProxyStatus(proxyType, 'offline')
+      return true
+    } catch (err) {
+      console.error(`Failed to uninstall ${proxyType}:`, err)
+      return false
+    }
   })
 
   // Handler para executar comandos Git através da IA
@@ -676,32 +868,61 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.AI_START_PROXY, async (_event, proxyType: 'deepsproxy' | 'kimiproxy') => {
+  ipcMain.handle(IPC_CHANNELS.AI_START_PROXY, async (_event, proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => {
+    const PROXY_PORT = 3000
     try {
       const homeDir = os.homedir()
       const proxyPath = path.join(homeDir, '.ezek-editor', proxyType)
-      
-      // Stop the other proxy to ensure mutual exclusion
-      if (proxyType === 'deepsproxy' && kimiProxyProcess) {
-        kimiProxyProcess.kill()
-        kimiProxyProcess = null
-        emitProxyStatus('kimiproxy', 'offline')
-      } else if (proxyType === 'kimiproxy' && deepsProxyProcess) {
-        deepsProxyProcess.kill()
+
+      // Stop ALL other proxies first (mutual exclusion — all share port 3000)
+      if (proxyType !== 'deepsproxy' && deepsProxyProcess) {
+        killProxyProcess(deepsProxyProcess)
         deepsProxyProcess = null
         emitProxyStatus('deepsproxy', 'offline')
       }
+      if (proxyType !== 'kimiproxy' && kimiProxyProcess) {
+        killProxyProcess(kimiProxyProcess)
+        kimiProxyProcess = null
+        emitProxyStatus('kimiproxy', 'offline')
+      }
+      if (proxyType !== 'geminiproxy' && geminiProxyProcess) {
+        killProxyProcess(geminiProxyProcess)
+        geminiProxyProcess = null
+        emitProxyStatus('geminiproxy', 'offline')
+      }
 
-      // Check if already running
+      // If THIS proxy is already running, return true
       if (proxyType === 'deepsproxy' && deepsProxyProcess) return true
       if (proxyType === 'kimiproxy' && kimiProxyProcess) return true
+      if (proxyType === 'geminiproxy' && geminiProxyProcess) return true
+
+      // Force-kill anything on port 3000 before starting (handles orphan processes)
+      try {
+        await fetch(`http://localhost:${PROXY_PORT}/shutdown`, { method: 'POST', signal: AbortSignal.timeout(2000) }).catch(() => {})
+        await new Promise(r => setTimeout(r, 500))
+      } catch (e) {}
+
+      // Force-kill by PID on Windows if port is still occupied
+      if (process.platform === 'win32') {
+        try {
+          const { stdout } = await execAsync(`netstat -ano | findstr :${PROXY_PORT} | findstr LISTENING`, { timeout: 5000 })
+          const lines = stdout.trim().split('\n')
+          for (const line of lines) {
+            const pid = line.trim().split(/\s+/).pop()
+            if (pid && /^\d+$/.test(pid) && pid !== '0') {
+              try { await execAsync(`taskkill /PID ${pid} /F`, { timeout: 5000 }) } catch (e) {}
+            }
+          }
+          await new Promise(r => setTimeout(r, 500))
+        } catch (e) { /* no process on port, that's fine */ }
+      }
 
       if (!fs.existsSync(proxyPath)) {
         console.error(`Proxy path does not exist: ${proxyPath}`)
         return false
       }
 
-      const env = { ...process.env, PORT: proxyType === 'kimiproxy' ? '3001' : '3002' }
+      const env = { ...process.env, PORT: String(PROXY_PORT) }
       
       const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
         cwd: proxyPath,
@@ -712,7 +933,7 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
 
       child.stdout?.on('data', (data) => {
         const out = data.toString()
-        if (out.includes('Server is running on port') || out.includes('listening')) {
+        if (out.includes('Server is running on port') || out.includes('listening') || out.includes('started!') || out.includes('started')) {
           emitProxyStatus(proxyType, 'online')
         }
       })
@@ -723,12 +944,14 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
 
       child.on('close', () => {
         if (proxyType === 'deepsproxy') deepsProxyProcess = null
-        else kimiProxyProcess = null
+        else if (proxyType === 'kimiproxy') kimiProxyProcess = null
+        else if (proxyType === 'geminiproxy') geminiProxyProcess = null
         emitProxyStatus(proxyType, 'offline')
       })
 
       if (proxyType === 'deepsproxy') deepsProxyProcess = child
-      else kimiProxyProcess = child
+      else if (proxyType === 'kimiproxy') kimiProxyProcess = child
+      else if (proxyType === 'geminiproxy') geminiProxyProcess = child
 
       return true
     } catch (e) {
@@ -737,18 +960,48 @@ REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja 
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.AI_STOP_PROXY, async (_event, proxyType: 'deepsproxy' | 'kimiproxy') => {
+  ipcMain.handle(IPC_CHANNELS.AI_STOP_PROXY, async (_event, proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => {
+    const PROXY_PORT = 3000
+
+    // Try graceful shutdown first
+    try {
+      await fetch(`http://localhost:${PROXY_PORT}/shutdown`, { method: 'POST', signal: AbortSignal.timeout(2000) }).catch(() => {});
+    } catch (e) {}
+
+    // Give it a short moment to gracefully close playwright
+    await new Promise(r => setTimeout(r, 500));
+
     if (proxyType === 'deepsproxy' && deepsProxyProcess) {
-      deepsProxyProcess.kill()
+      killProxyProcess(deepsProxyProcess)
       deepsProxyProcess = null
       emitProxyStatus('deepsproxy', 'offline')
       return true
     } else if (proxyType === 'kimiproxy' && kimiProxyProcess) {
-      kimiProxyProcess.kill()
+      killProxyProcess(kimiProxyProcess)
       kimiProxyProcess = null
       emitProxyStatus('kimiproxy', 'offline')
       return true
+    } else if (proxyType === 'geminiproxy' && geminiProxyProcess) {
+      killProxyProcess(geminiProxyProcess)
+      geminiProxyProcess = null
+      emitProxyStatus('geminiproxy', 'offline')
+      return true
     }
-    return false
+
+    // Fallback: force-kill port 3000 even if we lost the process reference
+    if (process.platform === 'win32') {
+      try {
+        const { stdout } = await execAsync(`netstat -ano | findstr :${PROXY_PORT} | findstr LISTENING`, { timeout: 5000 })
+        const lines = stdout.trim().split('\n')
+        for (const line of lines) {
+          const pid = line.trim().split(/\s+/).pop()
+          if (pid && /^\d+$/.test(pid) && pid !== '0') {
+            try { await execAsync(`taskkill /PID ${pid} /F`, { timeout: 5000 }) } catch (e) {}
+          }
+        }
+      } catch (e) {}
+    }
+    emitProxyStatus(proxyType, 'offline')
+    return true
   })
 }

@@ -1,8 +1,9 @@
-import { useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Editor, { OnMount, OnChange, loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { useEditorStore } from '../../store/editorStore'
 import { useThemeStore } from '../../store/themeStore'
+import { useSqlStore } from '../../store/sqlStore'
 import logo from '../../assets/logo.png'
 
 loader.config({ monaco })
@@ -12,7 +13,23 @@ export default function MonacoEditor() {
   const { theme } = useThemeStore()
   const activeFile = openFiles.find(f => f.id === activeFileId)
   const editorRef = useRef<any>(null)
-  const isDark = theme.type === 'dark'
+  const [settingsVersion, setSettingsVersion] = useState(0)
+  const editorSettings = useMemo(() => ({
+    codeTheme: localStorage.getItem('ezek-settings-code-editor-theme') || 'auto',
+    fontFamily: localStorage.getItem('ezek-settings-font') || "'JetBrains Mono', monospace",
+    fontLigatures: localStorage.getItem('ezek-settings-ligatures') === 'true',
+    pulseCursor: localStorage.getItem('ezek-settings-pulse') !== 'false',
+    ghostText: localStorage.getItem('ezek-settings-ghost-text') !== 'false',
+  }), [settingsVersion])
+  const isDark = editorSettings.codeTheme === 'auto'
+    ? theme.type === 'dark'
+    : editorSettings.codeTheme === 'dark'
+
+  useEffect(() => {
+    const handleSettingsChanged = () => setSettingsVersion(version => version + 1)
+    window.addEventListener('ezek-settings-changed', handleSettingsChanged)
+    return () => window.removeEventListener('ezek-settings-changed', handleSettingsChanged)
+  }, [])
 
   const handleEditorDidMount: OnMount = (editor, monacoInstance) => {
     editorRef.current = editor
@@ -21,37 +38,37 @@ export default function MonacoEditor() {
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '5A7A5A', fontStyle: 'italic' },
-        { token: 'keyword', foreground: '2EA043' },
-        { token: 'string', foreground: 'CE9178' },
-        { token: 'number', foreground: 'B5CEA8' },
-        { token: 'type', foreground: '3FB950' },
-        { token: 'function', foreground: 'DCDCAA' },
-        { token: 'variable', foreground: '9CDCFE' },
-        { token: 'constant', foreground: '4FC1FF' },
-        { token: 'operator', foreground: 'D4D4D4' },
-        { token: 'identifier', foreground: '9CDCFE' },
-        { token: 'predefined', foreground: 'DCDCAA' },
+        { token: 'comment', foreground: '5f7d8d', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '43e6a1' },
+        { token: 'string', foreground: '89ddff' },
+        { token: 'number', foreground: 'c3e88d' },
+        { token: 'type', foreground: '7dd3fc' },
+        { token: 'function', foreground: 'facc15' },
+        { token: 'variable', foreground: 'd7e8f4' },
+        { token: 'constant', foreground: 'b794f6' },
+        { token: 'operator', foreground: '80cbc4' },
+        { token: 'identifier', foreground: 'd7e8f4' },
+        { token: 'predefined', foreground: 'facc15' },
       ],
       colors: {
         'editor.background': '#00000000',
-        'editor.foreground': '#d4e6d4',
-        'editor.lineHighlightBackground': '#1a2d1f',
-        'editor.selectionBackground': '#1a3a2f',
-        'editorCursor.foreground': '#aeafad',
-        'editorLineNumber.foreground': '#5a7a5a',
-        'editorLineNumber.activeForeground': '#8aaa8a',
-        'editorBracketMatch.background': '#1a3a2f',
-        'editorBracketMatch.border': '#2ea043',
-        'editorWidget.background': '#152018',
-        'editorWidget.border': '#2a3d2f',
-        'editorSuggestWidget.background': '#152018',
-        'editorSuggestWidget.border': '#2a3d2f',
-        'editorSuggestWidget.selectedBackground': '#1a3a2f',
-        'editorHoverWidget.background': '#152018',
-        'editorHoverWidget.border': '#2a3d2f',
-        'editorWhitespace.foreground': '#1a2d1f',
-        'editorRuler.foreground': '#1a2d1f',
+        'editor.foreground': '#d7e8f4',
+        'editor.lineHighlightBackground': '#10283a',
+        'editor.selectionBackground': '#173b4d',
+        'editorCursor.foreground': '#43e6a1',
+        'editorLineNumber.foreground': '#476777',
+        'editorLineNumber.activeForeground': '#aec5cf',
+        'editorBracketMatch.background': '#173b4d',
+        'editorBracketMatch.border': '#43e6a1',
+        'editorWidget.background': '#0b1b2b',
+        'editorWidget.border': '#1d3444',
+        'editorSuggestWidget.background': '#0b1b2b',
+        'editorSuggestWidget.border': '#1d3444',
+        'editorSuggestWidget.selectedBackground': '#123146',
+        'editorHoverWidget.background': '#0b1b2b',
+        'editorHoverWidget.border': '#1d3444',
+        'editorWhitespace.foreground': '#193243',
+        'editorRuler.foreground': '#193243',
         'minimap.background': '#00000000',
       },
     })
@@ -60,35 +77,35 @@ export default function MonacoEditor() {
       base: 'vs',
       inherit: true,
       rules: [
-        { token: 'comment', foreground: '8aaa8a', fontStyle: 'italic' },
-        { token: 'keyword', foreground: '1a7f37' },
+        { token: 'comment', foreground: '748895', fontStyle: 'italic' },
+        { token: 'keyword', foreground: '00a96d' },
         { token: 'string', foreground: 'a31515' },
-        { token: 'number', foreground: '098658' },
+        { token: 'number', foreground: '008f61' },
         { token: 'type', foreground: '267f99' },
         { token: 'function', foreground: '795e26' },
-        { token: 'variable', foreground: '001080' },
+        { token: 'variable', foreground: '132635' },
         { token: 'constant', foreground: '0070c0' },
-        { token: 'operator', foreground: '000000' },
+        { token: 'operator', foreground: '1d3444' },
       ],
       colors: {
         'editor.background': '#00000000',
-        'editor.foreground': '#1a2d1f',
-        'editor.lineHighlightBackground': '#e8f0e8',
-        'editor.selectionBackground': '#d0f0d0',
-        'editorCursor.foreground': '#000000',
-        'editorLineNumber.foreground': '#8aaa8a',
-        'editorLineNumber.activeForeground': '#4a6a4a',
-        'editorBracketMatch.background': '#d0f0d0',
-        'editorBracketMatch.border': '#1a7f37',
-        'editorWidget.background': '#f0f7f0',
-        'editorWidget.border': '#d0e0d0',
+        'editor.foreground': '#132635',
+        'editor.lineHighlightBackground': '#edf2f6',
+        'editor.selectionBackground': '#c4f1e2',
+        'editorCursor.foreground': '#00bf7d',
+        'editorLineNumber.foreground': '#93a4ad',
+        'editorLineNumber.activeForeground': '#49606d',
+        'editorBracketMatch.background': '#d7f7eb',
+        'editorBracketMatch.border': '#00bf7d',
+        'editorWidget.background': '#ffffff',
+        'editorWidget.border': '#cddbe4',
         'editorSuggestWidget.background': '#ffffff',
-        'editorSuggestWidget.border': '#d0e0d0',
-        'editorSuggestWidget.selectedBackground': '#d0f0d0',
+        'editorSuggestWidget.border': '#cddbe4',
+        'editorSuggestWidget.selectedBackground': '#d7f7eb',
         'editorHoverWidget.background': '#ffffff',
-        'editorHoverWidget.border': '#d0e0d0',
-        'editorWhitespace.foreground': '#e8f0e8',
-        'editorRuler.foreground': '#e8f0e8',
+        'editorHoverWidget.border': '#cddbe4',
+        'editorWhitespace.foreground': '#dfeaf0',
+        'editorRuler.foreground': '#dfeaf0',
         'minimap.background': '#00000000',
       },
     })
@@ -99,6 +116,30 @@ export default function MonacoEditor() {
       const selection = editor.getModel()?.getValueInRange(e.selection) || ''
       useEditorStore.getState().setSelectedText(selection)
     })
+
+    if (activeFile?.language === 'sql') {
+      editor.addAction({
+        id: 'execute-sql',
+        label: 'Executar SQL Selecionado/Atual',
+        keybindings: [
+          monacoInstance.KeyMod.CtrlCmd | monacoInstance.KeyCode.Enter,
+          monacoInstance.KeyCode.F5
+        ],
+        contextMenuGroupId: 'navigation',
+        contextMenuOrder: 1,
+        run: (ed) => {
+          const sqlStore = useSqlStore.getState()
+          if (!sqlStore.activeConnectionId) {
+            alert('Selecione ou configure uma conexão SQL no painel inferior primeiro!')
+            return
+          }
+          const selection = ed.getModel()?.getValueInRange(ed.getSelection()!) || ''
+          const queryToRun = selection && selection.trim().length > 0 ? selection : ed.getValue()
+          sqlStore.executeQuery(queryToRun)
+          window.dispatchEvent(new CustomEvent('ezek:open-sql-tab'))
+        }
+      })
+    }
   }
 
   const handleChange: OnChange = (value) => {
@@ -116,7 +157,10 @@ export default function MonacoEditor() {
   }
 
   return (
-    <div className={`h-full w-full relative ${isDark ? 'bg-[#0f1a12]' : 'bg-[#ffffff]'}`} onContextMenu={(e) => e.preventDefault()}>
+    <div
+      className={`h-full w-full relative ${isDark ? 'bg-nova-bg' : 'bg-slate-50'}`}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <Editor
         key={`${activeFile.id}-${isDark ? 'dark' : 'light'}`}
         height="100%"
@@ -135,13 +179,13 @@ export default function MonacoEditor() {
         }
         options={{
           fontSize: 14,
-          fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace",
-          fontLigatures: true,
+          fontFamily: editorSettings.fontFamily,
+          fontLigatures: editorSettings.fontLigatures,
           minimap: { enabled: true, showSlider: 'mouseover' },
           scrollBeyondLastLine: false,
           lineNumbers: 'on',
           renderLineHighlight: 'line',
-          cursorBlinking: 'smooth',
+          cursorBlinking: editorSettings.pulseCursor ? 'smooth' : 'solid',
           cursorSmoothCaretAnimation: 'on',
           smoothScrolling: true,
           autoClosingBrackets: 'always',
@@ -149,7 +193,12 @@ export default function MonacoEditor() {
           autoIndent: 'full',
           formatOnPaste: true,
           bracketPairColorization: { enabled: true },
-          guides: { bracketPairs: true, indentation: true },
+          guides: {
+            indentation: true,
+            highlightActiveIndentation: true,
+            bracketPairs: true,
+            bracketPairsHorizontal: true,
+          },
           wordWrap: 'off',
           tabSize: 2,
           insertSpaces: true,
@@ -158,7 +207,9 @@ export default function MonacoEditor() {
           folding: true,
           foldingHighlight: true,
           suggestOnTriggerCharacters: true,
-          quickSuggestions: { other: true, comments: false, strings: true },
+          quickSuggestions: editorSettings.ghostText
+            ? { other: true, comments: false, strings: true }
+            : false,
           quickSuggestionsDelay: 50,
           parameterHints: { enabled: true, cycle: true },
           hover: { enabled: true, delay: 200 },

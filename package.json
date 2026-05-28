@@ -56,20 +56,23 @@
     "vite": "^5.1.0"
   },
   "build": {
-    "appId": "com.nova.editor",
+    "appId": "com.ezek.editor",
     "productName": "Ezek",
     "directories": {
       "output": "release"
     },
     "files": [
       "out/**/*",
-      "!node_modules/**/*"
+      "icon.ico",
+      "ico.png",
+      "logo.png",
+      "package.json"
     ],
     "win": {
       "target": [
         "nsis"
       ],
-      "icon": "ico.png"
+      "icon": "icon.ico"
     },
     "mac": {
       "target": [

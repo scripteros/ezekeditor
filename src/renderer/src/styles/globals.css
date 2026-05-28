@@ -10,6 +10,8 @@
 
 :root {
   color-scheme: dark;
+  --glass-opacity: 0.82;
+  --glass-blur: 14px;
 }
 
 html, body, #root {
@@ -18,6 +20,29 @@ html, body, #root {
   font-family: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--nova-bg, #08110d);
   color: var(--nova-text, #f3f4f6);
+}
+
+html.light {
+  color-scheme: light;
+}
+
+body {
+  background:
+    radial-gradient(circle at 2px 2px, color-mix(in srgb, var(--nova-text-muted) 26%, transparent) 1px, transparent 1px),
+    var(--nova-bg);
+  background-size: 18px 18px;
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--nova-focus-ring, #6757ff);
+  outline-offset: -1px;
 }
 
 ::-webkit-scrollbar {
@@ -61,4 +86,105 @@ html, body, #root {
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: var(--nova-accent, #22c55e);
   }
+
+  .glass-panel {
+    background: color-mix(in srgb, var(--nova-bg-secondary) 82%, transparent) !important;
+    border: 1px solid color-mix(in srgb, var(--nova-border) 74%, transparent);
+    box-shadow: 0 18px 50px var(--nova-shadow, rgba(0, 0, 0, 0.28));
+    backdrop-filter: blur(var(--glass-blur, 14px));
+    -webkit-backdrop-filter: blur(var(--glass-blur, 14px));
+  }
+
+  .ai-gradient {
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--nova-accent) 8%, transparent) 0%, transparent 46%),
+      var(--nova-bg) !important;
+  }
+
+  .pulse-cursor {
+    width: 8px;
+    height: 18px;
+    background-color: var(--nova-accent, #4edea3);
+    animation: pulse 1s infinite;
+    display: inline-block;
+    vertical-align: middle;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.1; }
+  }
+
+  .editor-bg {
+    background-image: radial-gradient(circle at 2px 2px, color-mix(in srgb, var(--nova-text-muted) 20%, transparent) 1px, transparent 0) !important;
+    background-size: 24px 24px !important;
+  }
+
+  .app-shell {
+    border: 1px solid var(--nova-focus-ring, #6757ff);
+    box-shadow:
+      inset 0 -3px 0 var(--nova-statusbar),
+      0 22px 70px var(--nova-shadow, rgba(0, 0, 0, 0.32));
+    background: var(--nova-bg);
+  }
+
+  .surface-panel {
+    background: var(--nova-bg-secondary);
+    border-color: var(--nova-border);
+  }
+
+  .neon-button {
+    background: var(--nova-accent);
+    color: var(--nova-statusbar-text);
+    box-shadow: 0 8px 22px color-mix(in srgb, var(--nova-accent) 24%, transparent);
+  }
+
+  .neon-button:hover {
+    background: var(--nova-accent-hover);
+  }
+}
+
+@layer utilities {
+  .bg-background { background-color: var(--nova-bg); }
+  .bg-surface-container { background-color: var(--nova-sidebar); }
+  .bg-surface-container-low { background-color: var(--nova-input-bg); }
+  .bg-surface-container-lowest { background-color: var(--nova-bg); }
+  .bg-surface-container-high { background-color: var(--nova-bg-tertiary); }
+  .bg-surface-variant { background-color: var(--nova-hover); }
+  .bg-primary { background-color: var(--nova-accent); }
+  .bg-primary\/5 { background-color: color-mix(in srgb, var(--nova-accent) 5%, transparent); }
+  .bg-primary\/10 { background-color: color-mix(in srgb, var(--nova-accent) 10%, transparent); }
+  .bg-primary\/20 { background-color: color-mix(in srgb, var(--nova-accent) 20%, transparent); }
+  .bg-primary-container { background-color: var(--nova-accent-hover); }
+  .bg-surface-variant\/20 { background-color: color-mix(in srgb, var(--nova-hover) 20%, transparent); }
+  .bg-surface-variant\/30 { background-color: color-mix(in srgb, var(--nova-hover) 30%, transparent); }
+  .bg-surface-variant\/50 { background-color: color-mix(in srgb, var(--nova-hover) 50%, transparent); }
+  .text-primary { color: var(--nova-accent); }
+  .text-primary-fixed { color: var(--nova-accent); }
+  .text-on-surface { color: var(--nova-text); }
+  .text-on-surface-variant { color: var(--nova-text-secondary); }
+  .text-on-primary-container { color: var(--nova-statusbar-text); }
+  .text-on-tertiary-container { color: var(--nova-text-muted); }
+  .text-label-xs { font-size: 11px; line-height: 1rem; }
+  .text-headline-lg { font-size: 24px; line-height: 2rem; }
+  .font-label-xs { font-weight: 700; }
+  .font-headline-lg { font-weight: 800; }
+  .border-outline-variant { border-color: var(--nova-border); }
+  .border-outline-variant\/20 { border-color: color-mix(in srgb, var(--nova-border) 20%, transparent); }
+  .border-outline-variant\/30 { border-color: color-mix(in srgb, var(--nova-border) 30%, transparent); }
+  .border-primary { border-color: var(--nova-accent); }
+  .border-primary\/10 { border-color: color-mix(in srgb, var(--nova-accent) 10%, transparent); }
+  .border-primary\/20 { border-color: color-mix(in srgb, var(--nova-accent) 20%, transparent); }
+  .border-primary\/30 { border-color: color-mix(in srgb, var(--nova-accent) 30%, transparent); }
+  .border-primary\/50 { border-color: color-mix(in srgb, var(--nova-accent) 50%, transparent); }
+  .shadow-primary\/5 { --tw-shadow-color: color-mix(in srgb, var(--nova-accent) 5%, transparent); --tw-shadow: var(--tw-shadow-colored); }
+  .ring-primary { --tw-ring-color: var(--nova-accent); }
+  .w-sidebar-width { width: 280px; }
+  .hover\:bg-primary\/10:hover { background-color: color-mix(in srgb, var(--nova-accent) 10%, transparent); }
+  .hover\:bg-primary\/20:hover { background-color: color-mix(in srgb, var(--nova-accent) 20%, transparent); }
+  .hover\:bg-surface-variant\/20:hover { background-color: color-mix(in srgb, var(--nova-hover) 20%, transparent); }
+  .hover\:bg-surface-variant\/30:hover { background-color: color-mix(in srgb, var(--nova-hover) 30%, transparent); }
+  .hover\:border-primary\/50:hover { border-color: color-mix(in srgb, var(--nova-accent) 50%, transparent); }
+  .hover\:border-outline-variant\/20:hover { border-color: color-mix(in srgb, var(--nova-border) 20%, transparent); }
+  .group:hover .group-hover\:border-primary\/30 { border-color: color-mix(in srgb, var(--nova-accent) 30%, transparent); }
 }

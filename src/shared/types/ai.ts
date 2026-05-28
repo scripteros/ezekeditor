@@ -23,14 +23,16 @@ export interface AIMessage {
 }
 
 export interface AIConfig {
-  provider: 'ollama' | 'openrouter' | 'openai' | 'custom' | 'routeway' | 'codebuff' | 'deepsproxy' | 'ds2api' | 'kimiproxy'
+  provider: 'ollama' | 'openrouter' | 'openai' | 'custom' | 'routeway' | 'codebuff' | 'deepsproxy' | 'kimiproxy' | 'geminiproxy'
   model: string
   apiKey: string
   baseUrl: string
   temperature: number
   maxTokens: number
+  routewayPath?: string
   deepsproxyPath?: string
   kimiproxyPath?: string
+  geminiproxyPath?: string
   allowAutonomousSql?: boolean
 }
 

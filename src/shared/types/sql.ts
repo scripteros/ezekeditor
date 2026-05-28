@@ -1,4 +1,19 @@
 export type DbProvider = 'postgres' | 'mysql' | 'oracle'
+export type RedisServerMode = 'local' | 'cloud'
+
+export interface RedisServerConfig {
+  id: string
+  name: string
+  redisEnabled?: boolean
+  redisMode?: RedisServerMode
+  redisUrl?: string
+  redisHost?: string
+  redisPort?: number
+  redisUsername?: string
+  redisPassword?: string
+  redisDatabase?: number
+  redisTls?: boolean
+}
 
 export interface DbConfig {
   id: string
@@ -13,13 +28,22 @@ export interface DbConfig {
   connectString?: string
   // Oracle thick mode client library path
   oracleClientLib?: string
-  // Redis Cache URL for AI Schema tracking
+  // Redis memory used by the AI chat and SQL history. Kept for backward compatibility.
   redisUrl?: string
+  redisEnabled?: boolean
+  redisMode?: RedisServerMode
+  redisHost?: string
+  redisPort?: number
+  redisUsername?: string
+  redisPassword?: string
+  redisDatabase?: number
+  redisTls?: boolean
 }
 
 export interface SqlQueryResult {
   success: boolean
   columns?: string[]
+  columnTypes?: Record<string, string>
   rows?: any[][]
   rowCount?: number
   error?: string

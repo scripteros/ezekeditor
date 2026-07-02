@@ -1,4 +1,4 @@
-import { Files, Search, GitFork, Sun, Moon, Store, Network, Settings } from 'lucide-react'
+import { Files, Search, GitFork, Sun, Moon, Store, Network, Settings, ListTodo } from 'lucide-react'
 import { useSidebarStore } from '../../store/sidebarStore'
 import { useThemeStore } from '../../store/themeStore'
 import { useGitStore } from '../../store/gitStore'
@@ -11,6 +11,7 @@ const activities = [
   { id: 'search', icon: Search, label: 'Pesquisar' },
   { id: 'git', icon: GitFork, label: 'Git' },
   { id: 'ldap', icon: Network, label: 'LDAP / AD' },
+  { id: 'backlog', icon: ListTodo, label: 'Backlog' },
   { id: 'extensions', icon: Store, label: 'Marketplace' },
 ] as const
 

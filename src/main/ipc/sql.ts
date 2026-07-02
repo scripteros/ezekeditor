@@ -55,7 +55,7 @@ function getLegacyRedisMemoryKey(config: DbConfig) {
   return `ezek:sql_cache:${config.id}`
 }
 
-async function saveToRedisCache(config: DbConfig, query: string, columns: string[], columnTypes: Record<string, string>, rowCount: number) {
+async function saveToRedisCache(config: DbConfig, query: string, columns: string[], columnTypes: Record<string, string>, rowCount: number, userId?: string) {
   const redis = createRedisClient(config)
   if (!redis) return
   try {
@@ -65,7 +65,7 @@ async function saveToRedisCache(config: DbConfig, query: string, columns: string
     
     const key = getRedisMemoryKey(config)
     
-    const cacheEntry = {
+    const cacheEntry: Record<string, any> = {
       connectionId: config.id,
       connectionName: config.name,
       provider: config.provider,
@@ -75,6 +75,10 @@ async function saveToRedisCache(config: DbConfig, query: string, columns: string
       columnTypes,
       rowCount,
       timestamp: Date.now()
+    }
+    
+    if (userId) {
+      cacheEntry.userId = userId
     }
     
     await redis.lpush(key, JSON.stringify(cacheEntry))
@@ -153,7 +157,7 @@ export function registerSqlHandlers() {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.SQL_GET_CACHE, async (_event, config: DbConfig) => {
+  ipcMain.handle(IPC_CHANNELS.SQL_GET_CACHE, async (_event, config: DbConfig, userId?: string) => {
     if (!config) return []
     const redis = createRedisClient(config)
     if (!redis) return []
@@ -171,7 +175,12 @@ export function registerSqlHandlers() {
         ...await redis.lrange(legacyKey, 0, 99),
       ].slice(0, 100)
       redis.disconnect()
-      return data.map(d => JSON.parse(d))
+      const parsed = data.map(d => JSON.parse(d))
+      // Filtrar apenas entradas do usuário atual (se userId foi informado)
+      if (userId) {
+        return parsed.filter(entry => entry.userId === userId)
+      }
+      return parsed
     } catch (err) {
       console.error('Failed to get Redis cache:', err)
       return []
@@ -236,7 +245,7 @@ export function registerSqlHandlers() {
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.SQL_EXECUTE_QUERY, async (_event, config: DbConfig, query: string): Promise<SqlQueryResult> => {
+  ipcMain.handle(IPC_CHANNELS.SQL_EXECUTE_QUERY, async (_event, config: DbConfig, query: string, userId?: string): Promise<SqlQueryResult> => {
     const startTime = Date.now()
     try {
       if (config.provider === 'postgres') {
@@ -280,7 +289,7 @@ export function registerSqlHandlers() {
           rowCount,
           executionTimeMs: Date.now() - startTime
         };
-        saveToRedisCache(config, query, columns, columnTypes, rowCount);
+        saveToRedisCache(config, query, columns, columnTypes, rowCount, userId);
         return payload;
       } else if (config.provider === 'mysql') {
         const connection = await mysql.createConnection({
@@ -328,7 +337,7 @@ export function registerSqlHandlers() {
           rowCount,
           executionTimeMs: Date.now() - startTime
         };
-        saveToRedisCache(config, query, columns, columnTypes, rowCount);
+        saveToRedisCache(config, query, columns, columnTypes, rowCount, userId);
         return payload;
       } else if (config.provider === 'oracle') {
         if (config.oracleClientLib) {
@@ -367,7 +376,7 @@ export function registerSqlHandlers() {
           rowCount: result.rowsAffected || rows.length,
           executionTimeMs: Date.now() - startTime
         };
-        saveToRedisCache(config, query, columns, columnTypes, rows.length);
+        saveToRedisCache(config, query, columns, columnTypes, rows.length, userId);
         return payload;
       }
       return { success: false, error: 'Provedor não suportado' }

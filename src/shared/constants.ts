@@ -10,18 +10,7 @@ export const IPC_CHANNELS = {
   AI_LIST_FILES: 'ai:listFiles',
   AI_LIST_ROUTEWAY_MODELS: 'ai:listRouteWayModels',
   AI_LIST_OPENROUTER_MODELS: 'ai:listOpenRouterModels',
-  AI_LIST_DEEPSPROXY_MODELS: 'ai:listDeepsProxyModels',
-  AI_CHECK_DEEPSPROXY: 'ai:checkDeepsProxy',
-  AI_INSTALL_DEEPSPROXY: 'ai:installDeepsProxy',
-  AI_LIST_KIMIPROXY_MODELS: 'ai:listKimiProxyModels',
-  AI_CHECK_KIMIPROXY: 'ai:checkKimiProxy',
-  AI_INSTALL_KIMIPROXY: 'ai:installKimiProxy',
-  AI_LIST_GEMINIPROXY_MODELS: 'ai:listGeminiProxyModels',
-  AI_CHECK_GEMINIPROXY: 'ai:checkGeminiProxy',
-  AI_INSTALL_GEMINIPROXY: 'ai:installGeminiProxy',
-  AI_UNINSTALL_PROXY: 'ai:uninstallProxy',
-  AI_START_PROXY: 'ai:startProxy',
-  AI_STOP_PROXY: 'ai:stopProxy',
+  AI_SAVE_AND_OPEN_DASHBOARD: 'ai:saveAndOpenDashboard',
 
   // OS
   OS_SHOW_ITEM_IN_FOLDER: 'os:showItemInFolder',
@@ -56,6 +45,23 @@ export const IPC_CHANNELS = {
   SECURITY_REQUEST_CAPTURED: 'security:requestCaptured',
   SECURITY_RESPONSE_CAPTURED: 'security:responseCaptured',
   SECURITY_OPEN_BROWSER: 'security:openBrowser',
+  SECURITY_START_MONITORING: 'security:startMonitoring',
+  SECURITY_STOP_MONITORING: 'security:stopMonitoring',
+  SECURITY_BROWSER_EVENT: 'security:browserEvent',
+  SECURITY_GET_COOKIES: 'security:getCookies',
+  SECURITY_CLEAR_BROWSER_DATA: 'security:clearBrowserData',
+  SECURITY_REPLAY_REQUEST: 'security:replayRequest',
+  SECURITY_PENTEST_REQUEST: 'security:pentestRequest',
+  SECURITY_START_MITM: 'security:startMitm',
+  SECURITY_STOP_MITM: 'security:stopMitm',
+  SECURITY_OPEN_CA_CERT: 'security:openCaCert',
+  SECURITY_OPEN_HTML_IN_BROWSER: 'security:openHtmlInBrowser',
+  
+  // Intercept
+  SECURITY_INTERCEPT_ENABLE: 'security:intercept:enable',
+  SECURITY_INTERCEPT_DISABLE: 'security:intercept:disable',
+  SECURITY_INTERCEPT_PENDING: 'security:intercept:pending',
+  SECURITY_INTERCEPT_ACTION: 'security:intercept:action',
   
   // LDAP
   LDAP_CONNECT: 'ldap:connect',
@@ -94,6 +100,11 @@ export const IPC_CHANNELS = {
   // File Watcher
   WATCH_DIRECTORY: 'watcher:watch',
   UNWATCH_DIRECTORY: 'watcher:unwatch',
+  
+  // Auth
+  AUTH_INIT: 'auth:init',
+  AUTH_LOGIN: 'auth:login',
+  AUTH_REGISTER: 'auth:register',
   
   // Events (main -> renderer)
   FILE_CHANGED: 'event:fileChanged',

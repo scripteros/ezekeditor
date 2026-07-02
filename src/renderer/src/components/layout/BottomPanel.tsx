@@ -5,7 +5,6 @@ import { useLogStore } from '../../store/logStore'
 import TerminalPanel from './TerminalPanel'
 import LogPanel from './LogPanel'
 import SqlPanel from '../sql/SqlPanel'
-import SecurityPanel from '../security/SecurityPanel'
 
 export default function BottomPanel() {
   const { terminals, activeTerminalId, setActiveTerminal, createNewTerminal } = useTerminalStore()
@@ -32,6 +31,9 @@ export default function BottomPanel() {
     if (tab === 'sql') {
       setPanelHeight(height => Math.max(height, 420))
       window.dispatchEvent(new CustomEvent('ezek:open-sql-workspace'))
+    } else if (tab === 'security') {
+      window.dispatchEvent(new CustomEvent('ezek:open-security-workspace'))
+      setIsVisible(false)
     }
   }
 
@@ -177,9 +179,6 @@ export default function BottomPanel() {
         </div>
         <div className={`absolute inset-0 ${activeTab === 'sql' ? 'z-10 opacity-100' : '-z-10 opacity-0 pointer-events-none'}`}>
           <SqlPanel />
-        </div>
-        <div className={`absolute inset-0 ${activeTab === 'security' ? 'z-10 opacity-100' : '-z-10 opacity-0 pointer-events-none'}`}>
-          <SecurityPanel />
         </div>
       </div>
     </div>

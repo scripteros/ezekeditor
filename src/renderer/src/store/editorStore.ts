@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { OpenTab } from '../../../shared/types'
 import { LANGUAGE_MAP } from '../../../shared/constants'
 import { getApi } from '../utils/platform'
+import { useSidebarStore } from './sidebarStore'
 
 interface EditorState {
   openFiles: OpenTab[]
@@ -41,9 +42,31 @@ function generateId(): string {
 }
 
 const contentCache = new Map<string, { content: string; timestamp: number }>()
-const CACHE_TTL = 30000
+const CACHE_TTL = 120000
 
 let autoSaveTimeout: Record<string, NodeJS.Timeout> = {}
+
+// Batch updates to avoid excessive re-renders
+let pendingContentUpdates: Record<string, string> = {}
+let batchTimeout: NodeJS.Timeout | null = null
+
+function flushContentUpdates() {
+  const updates = { ...pendingContentUpdates }
+  pendingContentUpdates = {}
+  batchTimeout = null
+  
+  useEditorStore.setState(state => {
+    const newFileContents = { ...state.fileContents }
+    const newOpenFiles = state.openFiles.map(f => {
+      if (updates[f.id] !== undefined) {
+        newFileContents[f.id] = updates[f.id]
+        return { ...f, content: updates[f.id], isDirty: true }
+      }
+      return f
+    })
+    return { fileContents: newFileContents, openFiles: newOpenFiles }
+  })
+}
 
 export const useEditorStore = create<EditorState>((set, get) => ({
   openFiles: [],
@@ -71,6 +94,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     if (existing) {
       set({ activeFileId: existing.id })
       window.dispatchEvent(new CustomEvent('ezek:close-sql-workspace'))
+      window.dispatchEvent(new CustomEvent('ezek:close-security-workspace'))
+      const currentView = useSidebarStore.getState().activeView
+      if (currentView === 'backlog' || currentView === 'settings' || currentView === 'extensions') {
+        useSidebarStore.getState().setActiveView('explorer')
+      }
       return
     }
 
@@ -105,6 +133,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         isLoadingFile: false,
       }))
       window.dispatchEvent(new CustomEvent('ezek:close-sql-workspace'))
+      window.dispatchEvent(new CustomEvent('ezek:close-security-workspace'))
+      const currentView = useSidebarStore.getState().activeView
+      if (currentView === 'backlog' || currentView === 'settings' || currentView === 'extensions') {
+        useSidebarStore.getState().setActiveView('explorer')
+      }
     } catch (err) {
       set({ isLoadingFile: false })
       console.error('Error opening file:', err)
@@ -133,12 +166,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
 
   updateFileContent: (fileId, content) => {
-    set(state => ({
-      fileContents: { ...state.fileContents, [fileId]: content },
-      openFiles: state.openFiles.map(f =>
-        f.id === fileId ? { ...f, content, isDirty: true } : f
-      ),
-    }))
+    // Store in batch buffer
+    pendingContentUpdates[fileId] = content
+    
+    if (!batchTimeout) {
+      batchTimeout = setTimeout(flushContentUpdates, 16) // ~60fps throttle
+    }
 
     const state = get()
     if (state.autoSave) {

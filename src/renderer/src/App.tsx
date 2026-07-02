@@ -8,17 +8,20 @@ import StatusBar from './components/layout/StatusBar'
 import CommandPalette from './components/commandPalette/CommandPalette'
 import RightPanel from './components/layout/RightPanel'
 import HorizontalResizer from './components/layout/HorizontalResizer'
+import LoginScreen from './components/auth/LoginScreen'
 import { useThemeStore } from './store/themeStore'
 import { useCommandPaletteStore } from './store/commandPaletteStore'
 import { useSidebarStore } from './store/sidebarStore'
 import { useAIStore } from './store/aiStore'
+import { useAuthStore } from './store/authStore'
 
 export default function App() {
   const { theme } = useThemeStore()
   const { togglePalette } = useCommandPaletteStore()
   const { isOpen: isSidebarOpen, activeView, setWidth: setSidebarWidth } = useSidebarStore()
   const { isPanelOpen, panelWidth, setPanelWidth } = useAIStore()
-  const shouldShowSidebar = isSidebarOpen && activeView !== 'extensions'
+  const user = useAuthStore(s => s.user)
+  const shouldShowSidebar = isSidebarOpen && activeView !== 'extensions' && activeView !== 'backlog'
 
   useEffect(() => {
     document.documentElement.className = theme.type
@@ -27,15 +30,6 @@ export default function App() {
       root.style.setProperty(`--nova-${key}`, value)
     })
   }, [theme])
-
-  useEffect(() => {
-    const api = (window as any).api
-    if (api && api.onProxyStatusChange) {
-      return api.onProxyStatusChange((proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy', status: 'online' | 'offline' | 'error') => {
-        useAIStore.getState().setProxyStatus(proxyType, status)
-      })
-    }
-  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -47,6 +41,10 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [togglePalette])
+
+  if (!user) {
+    return <LoginScreen />
+  }
 
   return (
     <div className="h-screen flex flex-col bg-nova-bg text-nova-text select-none app-shell">
@@ -62,7 +60,7 @@ export default function App() {
         )}
         <div className="flex flex-col flex-1 overflow-hidden min-w-[200px]">
           <EditorPanel />
-          <BottomPanel />
+          {activeView !== 'backlog' && <BottomPanel />}
         </div>
         {isPanelOpen && (
           <HorizontalResizer onResize={(delta) => {

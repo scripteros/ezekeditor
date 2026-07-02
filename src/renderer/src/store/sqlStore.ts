@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { DbConfig, RedisServerConfig, SqlQueryResult } from '../../../shared/types/sql'
+import { useAuthStore } from './authStore'
 
 export interface SqlEditorTab {
   id: string
@@ -165,7 +166,9 @@ export const useSqlStore = create<SqlState>()(
 
         set({ isExecuting: true })
         try {
-          const result = await api.sqlExecuteQuery(connectionWithRedis, query)
+          const authUser = useAuthStore.getState().user
+          const userId = authUser ? String(authUser.id) : undefined
+          const result = await api.sqlExecuteQuery(connectionWithRedis, query, userId)
           set((state) => ({
             queryResults: {
               ...state.queryResults,

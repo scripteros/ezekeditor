@@ -131,17 +131,6 @@ export interface IPCApi {
   aiListModels: (baseUrl?: string) => Promise<string[]>
   aiListRouteWayModels: () => Promise<any[]>
   aiListOpenRouterModels: () => Promise<any[]>
-  onProxyStatusChange: (callback: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy', status: 'online' | 'offline' | 'error') => void) => () => void
-  aiStartProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
-  aiStopProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
-  aiGetDeepSeekProxyStatus: () => Promise<{ ready: boolean; status: string; profileExists: boolean }>
-  aiListKimiProxyModels: () => Promise<any[]>
-  aiCheckKimiProxyInstalled: () => Promise<{ installed: boolean, path: string }>
-  aiInstallKimiProxy: () => Promise<boolean>
-  aiListGeminiProxyModels: () => Promise<any[]>
-  aiCheckGeminiProxyInstalled: () => Promise<{ installed: boolean, path: string }>
-  aiInstallGeminiProxy: () => Promise<boolean>
-  aiUninstallProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
 
   // SQL
   sqlTestConnection: (config: any) => Promise<{ success: boolean; error?: string }>
@@ -149,9 +138,33 @@ export interface IPCApi {
   sqlExecuteQuery: (config: any, query: string) => Promise<any>
   sqlGetCache: (config: any) => Promise<any[]>
   sqlCancelQuery: (config: any) => Promise<void>
+
+  // Security
+  securityStartProxy: (port: number) => Promise<boolean>
+  securityStopProxy: () => Promise<boolean>
+  securityOpenBrowser: () => Promise<{ ok: boolean; partition: string }>
+  securityStartMonitoring: () => Promise<{ ok: boolean; partition: string }>
+  securityStopMonitoring: () => Promise<boolean>
+  securityGetCookies: (url?: string) => Promise<any[]>
+  securityClearBrowserData: () => Promise<boolean>
+  securityReplayRequest: (request: { method: string; url: string; headers?: Record<string, string>; body?: string }) => Promise<any>
+  securityStartMitm: (port?: number) => Promise<{ ok: boolean; port: number; caPath: string; proxyRules: string }>
+  securityStopMitm: () => Promise<boolean>
+  securityOpenCaCert: () => Promise<string | null>
+  onSecurityRequestCaptured: (callback: (req: any) => void) => () => void
+  onSecurityResponseCaptured: (callback: (res: any) => void) => () => void
+  onSecurityBrowserEvent: (callback: (event: any) => void) => () => void
   
   // OS
   osShowItemInFolder: (path: string) => Promise<void>
+  
+  // Auth
+  authInit: () => Promise<{ success: boolean; error?: string }>
+  authLogin: (data: { usuario: string; senha: string }) => Promise<{ success: boolean; user?: { id: number; nome: string; usuario: string }; error?: string }>
+  authRegister: (data: { nome: string; usuario: string; senha: string }) => Promise<{ success: boolean; user?: { nome: string; usuario: string }; error?: string }>
+
+  // AI
+  aiSaveAndOpenDashboard: (htmlContent: string) => Promise<{ success: boolean; filePath?: string; filename?: string; error?: string }>
   
   // Events
   onFileChanged: (callback: (event: FileChangeEvent) => void) => () => void

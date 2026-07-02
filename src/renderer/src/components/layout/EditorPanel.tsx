@@ -12,6 +12,8 @@ import MarketplaceCatalog from '../extensions/MarketplaceCatalog'
 import { useSidebarStore } from '../../store/sidebarStore'
 import SettingsView from '../settings/SettingsView'
 import SqlEditorWorkspace from '../sql/SqlEditorWorkspace'
+import SecurityPanel from '../security/SecurityPanel'
+import BacklogWorkspace from '../backlog/BacklogPanel'
 
 export default function EditorPanel() {
   const { openFiles, activeFileId, setActiveFile, closeFile, isLoadingFile, isDiffMode } = useEditorStore()
@@ -20,6 +22,8 @@ export default function EditorPanel() {
   const { activeView } = useSidebarStore()
   const tabsRef = useRef<HTMLDivElement>(null)
   const [showSqlWorkspace, setShowSqlWorkspace] = useState(false)
+  const [showSecurityWorkspace, setShowSecurityWorkspace] = useState(false)
+  const tabListRef = useRef<HTMLDivElement>(null)
   
   const activeFile = openFiles.find(f => f.id === activeFileId)
   
@@ -53,13 +57,25 @@ export default function EditorPanel() {
   }
 
   useEffect(() => {
-    const handleOpenSqlWorkspace = () => setShowSqlWorkspace(true)
+    const handleOpenSqlWorkspace = () => {
+      setShowSecurityWorkspace(false)
+      setShowSqlWorkspace(true)
+    }
     const handleCloseSqlWorkspace = () => setShowSqlWorkspace(false)
+    const handleOpenSecurityWorkspace = () => {
+      setShowSqlWorkspace(false)
+      setShowSecurityWorkspace(true)
+    }
+    const handleCloseSecurityWorkspace = () => setShowSecurityWorkspace(false)
     window.addEventListener('ezek:open-sql-workspace', handleOpenSqlWorkspace)
     window.addEventListener('ezek:close-sql-workspace', handleCloseSqlWorkspace)
+    window.addEventListener('ezek:open-security-workspace', handleOpenSecurityWorkspace)
+    window.addEventListener('ezek:close-security-workspace', handleCloseSecurityWorkspace)
     return () => {
       window.removeEventListener('ezek:open-sql-workspace', handleOpenSqlWorkspace)
       window.removeEventListener('ezek:close-sql-workspace', handleCloseSqlWorkspace)
+      window.removeEventListener('ezek:open-security-workspace', handleOpenSecurityWorkspace)
+      window.removeEventListener('ezek:close-security-workspace', handleCloseSecurityWorkspace)
     }
   }, [])
 
@@ -89,8 +105,16 @@ export default function EditorPanel() {
     return <SettingsView />
   }
 
+  if (activeView === 'backlog') {
+    return <BacklogWorkspace />
+  }
+
   if (showSqlWorkspace) {
     return <SqlEditorWorkspace />
+  }
+
+  if (showSecurityWorkspace) {
+    return <SecurityPanel />
   }
 
   if (openFiles.length === 0) {
@@ -133,7 +157,9 @@ export default function EditorPanel() {
         {openFiles.map(file => (
           <div
             key={file.id}
-            onClick={() => setActiveFile(file.id)}
+            onClick={() => {
+              setActiveFile(file.id)
+            }}
             className={`group flex items-center gap-1.5 px-3 h-full cursor-pointer text-tabs border-r border-nova-border whitespace-nowrap transition-colors ${
               file.id === activeFileId
                 ? 'bg-nova-tab-active text-nova-text border-t-2 border-t-nova-accent'
@@ -185,19 +211,9 @@ export default function EditorPanel() {
         </div>
       </div>
       <div className="flex-1 overflow-hidden relative">
-        {/* Watermark Overlay */}
-        {openFiles.length > 0 && (
-          <div className="absolute inset-0 z-20 pointer-events-none flex items-center justify-center opacity-20">
-            <img src={logo} alt="" className="w-96 md:w-[450px] h-auto object-contain drop-shadow-lg" />
-          </div>
-        )}
-
         {isLoadingFile && (
           <div className="absolute inset-0 bg-nova-bg/80 flex items-center justify-center z-30">
-            <div className="flex items-center gap-2 text-nova-text-muted">
-              <Loader2 size={16} className="animate-spin" />
-              <span className="text-xs">Abrindo arquivo...</span>
-            </div>
+            <Loader2 size={16} className="animate-spin" />
           </div>
         )}
         

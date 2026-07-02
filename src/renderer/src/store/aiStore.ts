@@ -4,6 +4,7 @@ import { getApi } from '../utils/platform'
 import { useExplorerStore } from './explorerStore'
 import { useEditorStore } from './editorStore'
 import { useSqlStore } from './sqlStore'
+import { useAuthStore } from './authStore'
 
 interface RouteWayModel {
   id: string
@@ -21,6 +22,7 @@ interface SavedConfig {
 interface AIState {
   messages: AIMessage[]
   config: AIConfig
+  activeConfigId: string | null
   isProcessing: boolean
   isPanelOpen: boolean
   activePlanSteps: AIActionStep[]
@@ -32,33 +34,22 @@ interface AIState {
   isLoadingOllamaModels: boolean
   openRouterModels: RouteWayModel[]
   isLoadingOpenRouterModels: boolean
-  deepsproxyModels: RouteWayModel[]
-  isLoadingDeepsProxyModels: boolean
-  isDeepsProxyInstalled: boolean
-  kimiproxyModels: RouteWayModel[]
-  isLoadingKimiProxyModels: boolean
-  isKimiProxyInstalled: boolean
-  geminiproxyModels: RouteWayModel[]
-  isLoadingGeminiProxyModels: boolean
-  isGeminiProxyInstalled: boolean
-  deepsProxyStatus: 'online' | 'offline' | 'starting' | 'error'
-  kimiProxyStatus: 'online' | 'offline' | 'starting' | 'error'
-  geminiProxyStatus: 'online' | 'offline' | 'starting' | 'error'
   savedConfigs: SavedConfig[]
   chatHistories: Record<string, AIMessage[]>
+  currentChatId: string
   panelWidth: number
-  acquiredProxies: string[]
+  acquiredAPIs: string[]
   enabledAIProviders: string[]
-  acquireProxy: (id: string) => void
-  releaseProxy: (id: string) => void
-  enableAIProvider: (id: string) => void
-  disableAIProvider: (id: string) => void
-  stopProxy: (id: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
-  uninstallProxy: (id: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => Promise<boolean>
+  sessionFileWriteCount: number  // SAFETY: quantidade de arquivos criados na sessão atual
+  enableAPIProvider: (id: string) => void
+  disableAPIProvider: (id: string) => void
+  acquireAPI: (id: string) => void
+  releaseAPI: (id: string) => void
 
   addMessage: (msg: AIMessage) => void
   appendMessageContent: (id: string, text: string) => void
   setConfig: (config: Partial<AIConfig>) => void
+  setActiveConfigId: (id: string | null) => void
   sendMessage: (content: string, attachments?: AIAttachment[]) => Promise<void>
   cancelRequest: () => void
   togglePanel: () => void
@@ -75,28 +66,17 @@ interface AIState {
   selectOllamaModel: (modelId: string) => void
   fetchOpenRouterModels: () => Promise<void>
   selectOpenRouterModel: (modelId: string) => void
-  fetchDeepsProxyModels: () => Promise<void>
-  selectDeepsProxyModel: (modelId: string) => void
-  checkDeepsProxyInstalled: () => Promise<void>
-  fetchKimiProxyModels: () => Promise<void>
-  selectKimiProxyModel: (modelId: string) => void
-  checkKimiProxyInstalled: () => Promise<void>
-  fetchGeminiProxyModels: () => Promise<void>
-  selectGeminiProxyModel: (modelId: string) => void
-  checkGeminiProxyInstalled: () => Promise<void>
-  setProxyStatus: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy', status: 'online' | 'offline' | 'starting' | 'error') => void
   saveConfig: (name: string) => void
+  updateConfig: (id: string, updates: Partial<AIConfig>) => void
   loadConfig: (configId: string) => void
   deleteConfig: (configId: string) => void
+  activateConfig: (configId: string) => void
   saveChatHistory: () => void
   loadChatHistory: (chatId: string) => void
   deleteChatHistory: (chatId: string) => void
   createNewChat: () => void
   clearChat: () => void
   revertMessageChanges: (messageId: string) => Promise<void>
-  checkGeminiProxyInstalled: () => Promise<void>
-  checkKimiProxyInstalled: () => Promise<void>
-  checkDeepsProxyInstalled: () => Promise<void>
 }
 
 const DEFAULT_CONFIG: AIConfig = {
@@ -112,8 +92,17 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 11)
 }
 
+function getCurrentUserId(): string | null {
+  const user = useAuthStore.getState().user
+  return user ? String(user.id) : null
+}
+
+function getChatsStorageKey(): string {
+  const userId = getCurrentUserId()
+  return userId ? `ezek_ai_chats_${userId}` : 'ezek_ai_chats'
+}
+
 const STORAGE_KEY_CONFIGS = 'ezek_ai_configs'
-const STORAGE_KEY_CHATS = 'ezek_ai_chats'
 const STORAGE_KEY_ACTIVE_CONFIG = 'ezek_ai_active_config'
 
 type AIProviderId = AIConfig['provider']
@@ -127,7 +116,7 @@ function loadSavedConfigs(): SavedConfig[] {
 
 function loadChatHistories(): Record<string, AIMessage[]> {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY_CHATS)
+    const stored = localStorage.getItem(getChatsStorageKey())
     return stored ? JSON.parse(stored) : {}
   } catch { return {} }
 }
@@ -144,11 +133,12 @@ function providerDefaults(provider: AIProviderId): Partial<AIConfig> {
   if (provider === 'openai') return { provider, baseUrl: 'https://api.openai.com/v1', model: '' }
   if (provider === 'routeway') return { provider, baseUrl: 'https://api.routeway.ai/v1', model: '' }
   if (provider === 'openrouter') return { provider, baseUrl: 'https://openrouter.ai/api/v1', model: '' }
+  if (provider === 'lmstudio') return { provider, baseUrl: 'http://localhost:1234/v1', model: '' }
+  if (provider === 'deepseek') return { provider, baseUrl: 'https://api.deepseek.com/v1', model: '' }
+  if (provider === 'opencode') return { provider, baseUrl: 'https://api.opencode.ai/v1', model: '' }
+  if (provider === 'groq') return { provider, baseUrl: 'https://api.groq.com/openai/v1', model: '' }
   if (provider === 'custom') return { provider, model: '' }
   if (provider === 'codebuff') return { provider, model: '' }
-  if (provider === 'deepsproxy' || provider === 'kimiproxy' || provider === 'geminiproxy') {
-    return { provider, baseUrl: 'http://localhost:3000/v1', model: '' }
-  }
   return { provider, model: '' }
 }
 
@@ -156,6 +146,7 @@ async function buildRedisMemoryContext(): Promise<string> {
   const api = getApi()
   if (!api || !(api as any).sqlGetCache) return ''
 
+  const userId = getCurrentUserId()
   const { connections, redisServers, activeRedisServerId } = useSqlStore.getState()
   const activeRedis = redisServers.find(server => server.id === activeRedisServerId)
   const redisConnections = activeRedis
@@ -178,7 +169,7 @@ async function buildRedisMemoryContext(): Promise<string> {
 
   for (const conn of redisConnections) {
     try {
-      const entries = await (api as any).sqlGetCache(conn)
+      const entries = await (api as any).sqlGetCache(conn, userId)
       if (!entries || entries.length === 0) continue
 
       const lines = entries.slice(0, 40).map((entry: any, index: number) => {
@@ -257,6 +248,12 @@ if (chatIds.length > 0) {
 export const useAIStore = create<AIState>((set, get) => ({
   messages: initialMessages,
   config: loadActiveConfig() || DEFAULT_CONFIG,
+  activeConfigId: (() => {
+    try {
+      const stored = localStorage.getItem('ezek_active_config_id')
+      return stored || null
+    } catch { return null }
+  })(),
   isProcessing: false,
   isPanelOpen: false,
   activePlanSteps: [],
@@ -268,25 +265,13 @@ export const useAIStore = create<AIState>((set, get) => ({
   isLoadingOllamaModels: false,
   openRouterModels: [],
   isLoadingOpenRouterModels: false,
-  deepsproxyModels: [],
-  isLoadingDeepsProxyModels: false,
-  isDeepsProxyInstalled: false,
-  kimiproxyModels: [],
-  isLoadingKimiProxyModels: false,
-  isKimiProxyInstalled: false,
-  geminiproxyModels: [],
-  isLoadingGeminiProxyModels: false,
-  isGeminiProxyInstalled: false,
-  deepsProxyStatus: 'offline',
-  kimiProxyStatus: 'offline',
-  geminiProxyStatus: 'offline',
   savedConfigs: loadSavedConfigs() || [],
   chatHistories: initialHistories,
   currentChatId: initialChatId,
   panelWidth: 320,
-  acquiredProxies: (() => {
+  acquiredAPIs: (() => {
     try {
-      const stored = localStorage.getItem('ezek_acquired_proxies')
+      const stored = localStorage.getItem('ezek_acquired_apis')
       return stored ? JSON.parse(stored) : []
     } catch { return [] }
   })(),
@@ -296,92 +281,72 @@ export const useAIStore = create<AIState>((set, get) => ({
       return stored ? JSON.parse(stored) : []
     } catch { return [] }
   })(),
+  sessionFileWriteCount: 0,
 
-  acquireProxy: (id) => {
+  acquireAPI: (id) => {
     set(state => {
-      const updated = [...new Set([...state.acquiredProxies, id])]
+      const updated = [...new Set([...state.acquiredAPIs, id])]
       try {
-        localStorage.setItem('ezek_acquired_proxies', JSON.stringify(updated))
+        localStorage.setItem('ezek_acquired_apis', JSON.stringify(updated))
       } catch {}
-      return { acquiredProxies: updated }
+      return { acquiredAPIs: updated }
     })
   },
 
-  releaseProxy: (id) => {
+  releaseAPI: (id) => {
     set(state => {
-      const updated = state.acquiredProxies.filter(proxyId => proxyId !== id)
+      const updatedAcquired = state.acquiredAPIs.filter(apiId => apiId !== id)
+      const updatedEnabled = state.enabledAIProviders.filter(providerId => providerId !== id)
       try {
-        localStorage.setItem('ezek_acquired_proxies', JSON.stringify(updated))
+        localStorage.setItem('ezek_acquired_apis', JSON.stringify(updatedAcquired))
+        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updatedEnabled))
       } catch {}
-      return { acquiredProxies: updated }
+
+      const next: Partial<AIState> = { acquiredAPIs: updatedAcquired, enabledAIProviders: updatedEnabled }
+
+      if (state.config.provider === id) {
+        const fallbackProvider = (updatedEnabled[0] as AIProviderId | undefined) || 'custom'
+        next.config = { ...state.config, ...providerDefaults(fallbackProvider) }
+        try {
+          localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(next.config))
+        } catch {}
+      }
+
+      return next as any
     })
   },
 
-  enableAIProvider: (id) => {
+  enableAPIProvider: (id) => {
     set(state => {
-      const updated = [...new Set([...state.enabledAIProviders, id])]
+      const updatedAcquired = [...new Set([...state.acquiredAPIs, id])]
+      const updatedEnabled = [...new Set([...state.enabledAIProviders, id])]
       try {
-        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updated))
+        localStorage.setItem('ezek_acquired_apis', JSON.stringify(updatedAcquired))
+        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updatedEnabled))
       } catch {}
-      return { enabledAIProviders: updated }
+      return { acquiredAPIs: updatedAcquired, enabledAIProviders: updatedEnabled }
     })
-
-    get().setConfig(providerDefaults(id as AIProviderId))
   },
 
-  disableAIProvider: (id) => {
+  disableAPIProvider: (id) => {
     set(state => {
-      const updated = state.enabledAIProviders.filter(providerId => providerId !== id)
+      const updatedEnabled = state.enabledAIProviders.filter(providerId => providerId !== id)
       try {
-        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updated))
+        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updatedEnabled))
       } catch {}
-      return { enabledAIProviders: updated }
+
+      const next: Partial<AIState> = { enabledAIProviders: updatedEnabled }
+
+      if (state.config.provider === id) {
+        const fallbackProvider = (updatedEnabled[0] as AIProviderId | undefined) || 'custom'
+        next.config = { ...state.config, ...providerDefaults(fallbackProvider) }
+        try {
+          localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(next.config))
+        } catch {}
+      }
+
+      return next as any
     })
-
-    if (get().config.provider === id) {
-      get().setConfig({ provider: 'custom' as any, model: '' })
-    }
-  },
-
-  stopProxy: async (id) => {
-    const api = getApi()
-    if (!api) return false
-
-    try {
-      const success = await api.aiStopProxy(id)
-      get().setProxyStatus(id, success ? 'offline' : 'error')
-      return success
-    } catch {
-      get().setProxyStatus(id, 'error')
-      return false
-    }
-  },
-
-  uninstallProxy: async (id) => {
-    const api = getApi()
-    if (!api || !(api as any).aiUninstallProxy) return false
-
-    try {
-      await api.aiStopProxy(id)
-    } catch {}
-
-    const success = await (api as any).aiUninstallProxy(id)
-    if (!success) return false
-
-    get().releaseProxy(id)
-    get().disableAIProvider(id)
-    get().setProxyStatus(id, 'offline')
-
-    if (id === 'deepsproxy') set({ isDeepsProxyInstalled: false })
-    if (id === 'kimiproxy') set({ isKimiProxyInstalled: false })
-    if (id === 'geminiproxy') set({ isGeminiProxyInstalled: false })
-
-    const currentProvider = get().config.provider
-    if (currentProvider === id) {
-      get().setConfig({ provider: 'routeway', model: '' })
-    }
-
-    return true
   },
 
   addMessage: (msg) => {
@@ -400,20 +365,22 @@ export const useAIStore = create<AIState>((set, get) => ({
     try {
       localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify({ ...get().config, ...partial }))
     } catch {}
-
-    const selectedProvider = partial.provider
-    if (selectedProvider === 'deepsproxy' || selectedProvider === 'kimiproxy' || selectedProvider === 'geminiproxy') {
-      const api = getApi()
-      if (api) {
-        get().setProxyStatus(selectedProvider, 'starting' as any)
-        api.aiStartProxy(selectedProvider)
-          .then(success => get().setProxyStatus(selectedProvider, success ? 'online' : 'error'))
-          .catch(() => get().setProxyStatus(selectedProvider, 'error'))
-      }
-    }
   },
 
-  sendMessage: async (content: string, attachments?: AIAttachment[], isHiddenSystemMessage = false) => {
+  setActiveConfigId: (id) => {
+    set({ activeConfigId: id })
+    try {
+      localStorage.setItem('ezek_active_config_id', id || '')
+    } catch {}
+  },
+
+  sendMessage: async (content: string, attachments?: AIAttachment[], isHiddenSystemMessage = false, depth = 0) => {
+    // Profundidade máxima para evitar loop infinito no agentic loop
+    if (depth > 3) {
+      set({ isProcessing: false })
+      return
+    }
+    
     const { isProcessing } = get()
     if (isProcessing && !isHiddenSystemMessage) return
 
@@ -468,6 +435,12 @@ export const useAIStore = create<AIState>((set, get) => ({
         messageContent += redisMemoryContext
       }
 
+      // Adicionar identidade do usuário para contexto da IA
+      const authUser = useAuthStore.getState().user
+      if (authUser) {
+        messageContent = `[USUÁRIO ATUAL]: ${authUser.nome} (usuário: ${authUser.usuario})\n\n${messageContent}`
+      }
+
       // Adicionar contexto SQL se for relevante
       const { activeFileId, openFiles } = useEditorStore.getState()
       const activeFile = openFiles.find(f => f.id === activeFileId)
@@ -494,8 +467,44 @@ export const useAIStore = create<AIState>((set, get) => ({
             messageContent += `\n\n[AGENTE SQL ATIVADO]: Você tem permissão para consultar o banco de dados de forma autônoma para resolver o problema do usuário.
 Se você precisar buscar dados ou investigar a estrutura, use a action: {"type": "execute_sql", "query": "SEU SQL AQUI"}.
 Eu vou executar o SQL silenciosamente e te devolver o resultado. Você pode fazer isso quantas vezes quiser até obter todos os dados necessários.
-Quando tiver os dados, dê a sua resposta final para o usuário. IMPORTANTE: Não mostre os códigos SQL executados na sua resposta final, apenas os dados e a explicação. O sistema irá anexar o SQL no final automaticamente.
-Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você tem permissão para consultar. Execute as consultas necessárias, analise o resultado e só então conclua.`;
+IMPORTANTE - REGRA DE ENTREGA: Você DEVE SEMPRE entregar a conclusão final da solicitação. Siga este fluxo:
+1. Se precisar de dados, execute o SQL primeiro
+2. Quando receber os dados, ANALISE e APRESENTE o resultado ao usuário
+3. NUNCA responda apenas com "vou buscar" ou "vou fazer" - você já tem permissão, então FAÇA e entregue
+4. Após obter os dados com sucesso, responda em texto normal (NUNCA use JSON) com o resultado completo
+5. Se o SQL falhar, corrija o erro e tente novamente quantas vezes precisar
+6. Somente se faltar alguma informação essencial que você não tem como obter, PEÇA ao usuário
+
+IMPORTANTE: Não mostre os códigos SQL executados na sua resposta final, apenas os dados e a explicação. O sistema irá anexar o SQL no final automaticamente.
+
+REGRAS OBRIGATÓRIAS PARA ORACLE TASY (DBLINK @tasyprod):
+
+DECISÃO — QUANDO USAR DBLINK:
+- Tabelas do sistema Tasy (pacientes, atendimentos, guias, contas, faturamento, etc): use \`tasy.NOME@tasyprod\`
+- Tabelas locais (próprias do banco conectado, relatórios customizados): NÃO use @tasyprod
+- Se não tem certeza: tente sem @tasyprod → se der ORA-00942, tente com \`tasy.NOME@tasyprod\`
+
+SINTAXE CORRETA (OBRIGATÓRIO):
+- \`tasy.nome_tabela@tasyprod\` — SEMPRE com \`tasy.\` ANTES e \`@tasyprod\` DEPOIS
+- \`tasy.pacote.funcao@tasyprod(param)\` — para functions
+- Exemplo: \`SELECT * FROM tasy.pacientes@tasyprod WHERE cod_paciente = 1234\`
+- Exemplo CORRETO: \`SELECT p.nome, a.cod_atendimento FROM tasy.pacientes@tasyprod p, tasy.atendimentos@tasyprod a WHERE p.cod_paciente = a.cod_paciente\`
+- Exemplo ERRADO: \`SELECT * FROM pacientes@tasyprod\` (falta \`tasy.\`)
+- Exemplo ERRADO: \`SELECT * FROM tasy.pacientes\` (falta \`@tasyprod\`)
+
+AUTO-CORREÇÃO OBRIGATÓRIA (SEMPRE SIGA):
+Quando seu SQL der erro, você DEVE automaticamente:
+1. Analisar o erro ORA-XXXXX
+2. ORA-00942 (table/view not found): 
+   - Sem @tasyprod → adicione \`tasy.NOME@tasyprod\`
+   - Com @tasyprod e ainda erro → busque nome correto da tabela
+3. ORA-00904 (invalid identifier / coluna não existe):
+   - Investigue colunas reais: \`SELECT column_name FROM all_tab_columns@tasyprod WHERE table_name = 'TABELA'\`
+   - Ajuste a query com o nome correto da coluna
+4. ORA-00933 (SQL not properly ended): troque ANSI JOIN por sintaxe Oracle antiga
+5. Corrija e tente novamente. REPITA até funcionar.
+6. Depois de obter os dados, SEMPRE entregue a resposta final ao usuário
+7. NUNCA pare no meio — finalize o raciocínio e entregue a conclusão`;
           }
         }
       }
@@ -559,7 +568,35 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
           return `${cleanRoot}/${cleanPath}`;
         };
 
-        if (parsedActions && Array.isArray(parsedActions)) {
+        // SAFETY: verifica se o arquivo está dentro do diretório do projeto
+        // (comparação simples de string, path não está disponível no renderer)
+        const isPathSafe = (filePath: string): boolean => {
+          if (!rootPath) return true;
+          const normalizedPath = filePath.replace(/\\/g, '/');
+          const normalizedRoot = rootPath.replace(/\\/g, '/');
+          return normalizedPath.startsWith(normalizedRoot);
+        };
+
+        // SAFETY: lista de diretórios bloqueados para escrita da IA
+        const blockedDirectories = [
+          '\\Desktop\\', '/Desktop/',
+          '\\Documentos\\', '/Documentos/',
+          '\\Documents\\', '/Documents/',
+          '\\Downloads\\', '/Downloads/',
+          '\\AppData\\', '/AppData/',
+          '\\Program Files\\', '/Program Files/',
+          '\\Windows\\', '/Windows/',
+          '\\System32\\', '/System32/',
+        ];
+
+        const isPathBlocked = (filePath: string): boolean => {
+          return blockedDirectories.some(dir => filePath.includes(dir));
+        };
+
+        const MAX_FILE_WRITES_PER_SESSION = 25;
+
+        // Só executa ações na primeira chamada (depth 0) para evitar loop infinito
+        if (depth === 0 && parsedActions && Array.isArray(parsedActions)) {
           let executedAny = false;
           let fileChanges: { path: string, add: number, del: number, originalContent?: string }[] = [];
           let actionFeedback = '';
@@ -577,6 +614,26 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
                  executedAny = true;
               }
               else if (action.type === 'write_file' && action.filePath && action.content) {
+                // SAFETY: bloquear escrita em diretórios do sistema (Desktop, Documentos, etc)
+                const resolvedPath = action.filePath; // já resolvido pelo resolvePath acima
+                
+                if (isPathBlocked(resolvedPath)) {
+                  actionFeedback += `\n[BLOCKED] Escrita em ${resolvedPath} bloqueada por segurança. A IA só pode criar arquivos dentro do diretório do projeto.\n`;
+                  continue;
+                }
+
+                if (!isPathSafe(resolvedPath)) {
+                  actionFeedback += `\n[BLOCKED] Escrita em ${resolvedPath} bloqueada — fora do diretório do projeto. Use caminhos relativos ao projeto.\n`;
+                  continue;
+                }
+
+                // SAFETY: limite de arquivos por sessão
+                const currentCount = get().sessionFileWriteCount;
+                if (currentCount >= MAX_FILE_WRITES_PER_SESSION) {
+                  actionFeedback += `\n[BLOCKED] Limite de ${MAX_FILE_WRITES_PER_SESSION} arquivos criados por sessão atingido. Não é possível criar mais arquivos.\n`;
+                  continue;
+                }
+
                 let add = 0;
                 let del = 0;
                 let originalContentToSave = '';
@@ -602,7 +659,7 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
                      }
                   }
                 } catch {
-                  // File probably didn't exist
+                  // File probably didn't exist — nova criação
                   add = action.content.split('\n').length;
                 }
 
@@ -613,6 +670,8 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
                 try {
                   await api.aiWriteFile(action.filePath, action.content);
                   useEditorStore.getState().openFile(action.filePath);
+                  // Incrementa o contador de arquivos criados na sessão
+                  set(state => ({ sessionFileWriteCount: state.sessionFileWriteCount + 1 }));
                   actionFeedback += `\n[Success: wrote file ${action.filePath}]\n`;
                 } catch (err: any) {
                   actionFeedback += `\n[Error writing ${action.filePath}]: ${err.message || 'Permission denied'}\n`;
@@ -663,19 +722,12 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
                 
                 executedAny = true;
               }
-            }
+          }
+
             if (executedAny) {
-              const successMsg: AIMessage = {
-                id: generateId(),
-                role: 'assistant',
-                content: `✅ Ações processadas pelo sistema (veja feedback na próxima mensagem).`,
-                timestamp: Date.now(),
-                type: 'result',
-                hidden: true // Esconder a mensagem de success do loop do usuário
-              }
-              
+              // Atualiza o assistantMsg original com os fileChanges, SEM adicionar mensagem intermediária
               set(state => {
-                const updatedMessages = [...state.messages, successMsg];
+                const updatedMessages = [...state.messages];
                 if (fileChanges.length > 0) {
                   const msgIndex = updatedMessages.findIndex(m => m.id === assistantMsg.id);
                   if (msgIndex !== -1) {
@@ -688,14 +740,26 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
               get().saveChatHistory();
 
               // Agentic Loop: Enviar o feedback de volta para a IA silenciosamente
+              // Aguarda a resposta para manter isProcessing ativo durante todo o ciclo
               if (actionFeedback.trim().length > 0) {
-                setTimeout(() => {
-                  const prompt = `[SYSTEM AUTO-FEEDBACK] Resultado das suas ações:\n${actionFeedback}\n\nContinue a tarefa até concluir. Se houve erros, corrija-os e tente novamente. Se você leu um arquivo ou executou SQL com sucesso, use as informações para continuar seu trabalho. Se tudo deu certo, finalize com uma conclusão clara do que foi feito e do resultado obtido. Responda no formato JSON válido somente se ainda precisar executar novas ações; se a tarefa estiver concluída, responda em texto normal.`;
-                  get().sendMessage(prompt, undefined, true);
-                }, 800);
+                const hasErrors = actionFeedback.includes('[SQL Execution Error]') || actionFeedback.includes('[Error');
+                const prompt = hasErrors
+                  ? `[SYSTEM AUTO-FEEDBACK] Resultado das suas ações:\n${actionFeedback}\n\n${actionFeedback.includes('[SQL Execution Error]') ? '⚠️ O SQL ACUSOU ERRO. Corrija o SQL com base no erro e tente novamente.\n' : ''}Agora, com base nos dados obtidos, responda em texto normal (NÃO use JSON) com a conclusão final para o usuário. Entregue o resultado completo do que foi solicitado. Se houver dados, apresente-os de forma clara. NÃO repita ações, NÃO use JSON.`
+                  : `[SYSTEM AUTO-FEEDBACK] Resultado das suas ações:\n${actionFeedback}\n\nCom base nos dados obtidos acima, responda em texto normal (NÃO use JSON) com a conclusão final para o usuário. Entregue o resultado completo do que foi solicitado. Se houver dados, apresente-os de forma clara.`;
+                await new Promise(resolve => setTimeout(resolve, 500)); // pequena pausa para UI atualizar
+                await get().sendMessage(prompt, undefined, true, depth + 1);
               }
             }
           }
+
+        // SAFETY NET: detecta "promessa vazia" — IA disse que vai fazer algo mas não executou ação
+        if (depth === 0 && cleanedResponse && !parsedActions?.length) {
+          const promisePattern = /vou\s+(buscar|consultar|fazer|procurar|verificar|analisar|executar|criar|gerar|montar|preparar|tentar|prosseguir|iniciar|começar|investigar)|deixe-me|deixa\s+eu|vamos\s+(buscar|consultar|fazer)/i;
+          if (promisePattern.test(cleanedResponse)) {
+            const prompt = `[SISTEMA] Você respondeu apenas com texto dizendo que vai fazer algo, mas NÃO executou a ação necessária. Quando precisa consultar dados no banco, você DEVE usar o formato JSON com "actions": [{"type": "execute_sql", "query": "..."}]. Responda AGORA com o JSON contendo a ação necessária. Coloque no campo "message" apenas "Processando...". NÃO escreva texto explicativo, NÃO diga "vou buscar" — apenas o JSON com a ação.`;
+            await get().sendMessage(prompt, undefined, true, 1);
+          }
+        }
       } catch (e) {
         console.error("Failed to parse/execute actions", e);
       }
@@ -806,121 +870,32 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
     get().setConfig({ model: modelId })
   },
 
-  fetchDeepsProxyModels: async () => {
-    const api = getApi()
-    if (!api) return
-    set({ isLoadingDeepsProxyModels: true })
-    try {
-      const models: RouteWayModel[] = await (api as any).aiListDeepsProxyModels()
-      set({ deepsproxyModels: models, isLoadingDeepsProxyModels: false })
-      const freeModels = models.filter(m => m.free)
-      if (freeModels.length > 0 && !get().config.model) {
-        set(state => ({ config: { ...state.config, model: freeModels[0].id } }))
-      }
-    } catch {
-      set({ isLoadingDeepsProxyModels: false })
-    }
-  },
-
-  selectDeepsProxyModel: (modelId) => {
-    get().setConfig({ model: modelId })
-  },
-
-  checkDeepsProxyInstalled: async () => {
-    const api = getApi()
-    if (!api) return
-    try {
-      const { installed, path } = await (api as any).aiCheckDeepsProxy()
-      set({ isDeepsProxyInstalled: installed })
-      if (installed) get().acquireProxy('deepsproxy')
-      if (installed && !get().config.deepsproxyPath) {
-        get().setConfig({ deepsproxyPath: path })
-      }
-    } catch {}
-  },
-
-  fetchKimiProxyModels: async () => {
-    const api = getApi()
-    if (!api) return
-    set({ isLoadingKimiProxyModels: true })
-    try {
-      const models: RouteWayModel[] = await (api as any).aiListKimiProxyModels()
-      set({ kimiproxyModels: models, isLoadingKimiProxyModels: false })
-      const freeModels = models.filter(m => m.free)
-      if (freeModels.length > 0 && !get().config.model) {
-        set(state => ({ config: { ...state.config, model: freeModels[0].id } }))
-      }
-    } catch {
-      set({ isLoadingKimiProxyModels: false })
-    }
-  },
-
-  selectKimiProxyModel: (modelId) => {
-    get().setConfig({ model: modelId })
-  },
-
-  checkKimiProxyInstalled: async () => {
-    const api = getApi()
-    if (!api) return
-    try {
-      const { installed, path } = await (api as any).aiCheckKimiProxyInstalled()
-      set({ isKimiProxyInstalled: installed })
-      if (installed) get().acquireProxy('kimiproxy')
-      if (installed && !get().config.kimiproxyPath) {
-        get().setConfig({ kimiproxyPath: path })
-      }
-    } catch {}
-  },
-
-  fetchGeminiProxyModels: async () => {
-    const api = getApi()
-    if (!api) return
-    set({ isLoadingGeminiProxyModels: true })
-    try {
-      const models: RouteWayModel[] = await (api as any).aiListGeminiProxyModels()
-      set({ geminiproxyModels: models, isLoadingGeminiProxyModels: false })
-      const freeModels = models.filter(m => m.free)
-      if (freeModels.length > 0 && !get().config.model) {
-        set(state => ({ config: { ...state.config, model: freeModels[0].id } }))
-      }
-    } catch {
-      set({ isLoadingGeminiProxyModels: false })
-    }
-  },
-
-  selectGeminiProxyModel: (modelId) => {
-    get().setConfig({ model: modelId })
-  },
-
-  checkGeminiProxyInstalled: async () => {
-    const api = getApi()
-    if (!api) return
-    try {
-      const { installed, path } = await (api as any).aiCheckGeminiProxyInstalled()
-      set({ isGeminiProxyInstalled: installed })
-      if (installed) get().acquireProxy('geminiproxy')
-      if (installed && !get().config.geminiproxyPath) {
-        get().setConfig({ geminiproxyPath: path })
-      }
-    } catch {}
-  },
-
-  setProxyStatus: (proxyType, status) => {
-    if (proxyType === 'deepsproxy') set({ deepsProxyStatus: status })
-    else if (proxyType === 'kimiproxy') set({ kimiProxyStatus: status })
-    else if (proxyType === 'geminiproxy') set({ geminiProxyStatus: status })
-  },
-
-  saveCurrentConfig: () => {
+  saveConfig: (customName?: string) => {
     const { config, savedConfigs } = get()
-    const name = prompt('Nome para esta configuração:', `${config.provider} - ${config.model || 'sem modelo'}`)
+    const name = customName || prompt('Nome para esta configuração:', `${config.provider} - ${config.model || 'sem modelo'}`)
     if (!name) return
     const newConfig: SavedConfig = {
       id: generateId(),
       name,
-      config: { ...config },
+      config: { ...config, id: generateId(), name },
     }
     const updated = [...savedConfigs, newConfig]
+    set({ savedConfigs: updated, activeConfigId: newConfig.id })
+    try {
+      localStorage.setItem(STORAGE_KEY_CONFIGS, JSON.stringify(updated))
+      localStorage.setItem('ezek_active_config_id', newConfig.id)
+    } catch {}
+  },
+
+  updateConfig: (configId, updates) => {
+    const { savedConfigs } = get()
+    const updated = savedConfigs.map(c => {
+      if (c.id === configId) {
+        const updatedConfig = { ...c.config, ...updates }
+        return { ...c, config: updatedConfig }
+      }
+      return c
+    })
     set({ savedConfigs: updated })
     try { localStorage.setItem(STORAGE_KEY_CONFIGS, JSON.stringify(updated)) } catch {}
   },
@@ -929,8 +904,11 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
     const { savedConfigs } = get()
     const found = savedConfigs.find(c => c.id === configId)
     if (found) {
-      set({ config: { ...found.config } })
-      try { localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(found.config)) } catch {}
+      set({ config: { ...found.config }, activeConfigId: configId })
+      try {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(found.config))
+        localStorage.setItem('ezek_active_config_id', configId)
+      } catch {}
       if (found.config.provider === 'routeway') {
         get().fetchRouteWayModels()
       }
@@ -938,16 +916,33 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
   },
 
   deleteConfig: (configId) => {
-    const updated = get().savedConfigs.filter(c => c.id !== configId)
+    const { savedConfigs, activeConfigId } = get()
+    const updated = savedConfigs.filter(c => c.id !== configId)
     set({ savedConfigs: updated })
+    if (activeConfigId === configId) {
+      set({ activeConfigId: null })
+      try { localStorage.setItem('ezek_active_config_id', '') } catch {}
+    }
     try { localStorage.setItem(STORAGE_KEY_CONFIGS, JSON.stringify(updated)) } catch {}
+  },
+
+  activateConfig: (configId) => {
+    const { savedConfigs } = get()
+    const found = savedConfigs.find(c => c.id === configId)
+    if (found) {
+      set({ config: { ...found.config }, activeConfigId: configId })
+      try {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(found.config))
+        localStorage.setItem('ezek_active_config_id', configId)
+      } catch {}
+    }
   },
 
   saveChatHistory: () => {
     const { messages, currentChatId, chatHistories } = get()
     const updated = { ...chatHistories, [currentChatId]: messages }
     set({ chatHistories: updated })
-    try { localStorage.setItem(STORAGE_KEY_CHATS, JSON.stringify(updated)) } catch {}
+    try { localStorage.setItem(getChatsStorageKey(), JSON.stringify(updated)) } catch {}
   },
 
   loadChatHistory: (chatId) => {
@@ -963,13 +958,23 @@ Não encerre dizendo que "vai fazer" ou que "o usuário deve executar" se você 
     const updated = { ...chatHistories }
     delete updated[chatId]
     set({ chatHistories: updated })
-    try { localStorage.setItem(STORAGE_KEY_CHATS, JSON.stringify(updated)) } catch {}
+    try { localStorage.setItem(getChatsStorageKey(), JSON.stringify(updated)) } catch {}
   },
 
   createNewChat: () => {
     const newId = generateId()
-    set({ messages: [], currentChatId: newId })
-    get().saveChatHistory()
+    // Limpa TODO o estado da conversa anterior: mensagens, planos, mudanças pendentes
+    set({
+      messages: [],
+      currentChatId: newId,
+      activePlanSteps: [],
+      pendingChanges: []
+    })
+    // Persiste o chat vazio no localStorage
+    const { chatHistories } = get()
+    const updated = { ...chatHistories, [newId]: [] }
+    set({ chatHistories: updated })
+    try { localStorage.setItem(getChatsStorageKey(), JSON.stringify(updated)) } catch {}
   },
 
   clearChat: () => {

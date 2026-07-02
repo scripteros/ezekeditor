@@ -15,38 +15,6 @@ const execAsync = promisify(exec)
 let abortController: AbortController | null = null
 const codebuffSessions: Record<string, any> = {}
 
-let deepsProxyProcess: ChildProcess | null = null
-let kimiProxyProcess: ChildProcess | null = null
-let geminiProxyProcess: ChildProcess | null = null
-
-function killProxyProcess(child: ChildProcess | null) {
-  if (!child) return
-  if (process.platform === 'win32' && child.pid) {
-    spawn('taskkill', ['/pid', child.pid.toString(), '/t'])
-  } else {
-    child.kill()
-  }
-}
-
-function emitProxyStatus(proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy', status: 'online' | 'offline' | 'error') {
-  const wins = BrowserWindow.getAllWindows()
-  if (wins.length > 0) {
-    wins[0].webContents.send('ai:proxyStatusChange', proxyType, status)
-  }
-}
-
-function getProxyProcess(proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') {
-  if (proxyType === 'deepsproxy') return deepsProxyProcess
-  if (proxyType === 'kimiproxy') return kimiProxyProcess
-  return geminiProxyProcess
-}
-
-function clearProxyProcess(proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') {
-  if (proxyType === 'deepsproxy') deepsProxyProcess = null
-  else if (proxyType === 'kimiproxy') kimiProxyProcess = null
-  else geminiProxyProcess = null
-}
-
 async function queryOllama(baseUrl: string, model: string, prompt: string, signal: AbortSignal): Promise<string> {
   const cleanBaseUrl = (baseUrl || 'http://localhost:11434').replace(/\/+$/, '')
   const response = await fetch(`${cleanBaseUrl}/api/generate`, {
@@ -66,7 +34,8 @@ async function queryOllama(baseUrl: string, model: string, prompt: string, signa
 }
 
 async function queryOpenAI(config: { baseUrl: string; apiKey: string; model: string }, prompt: string, signal: AbortSignal): Promise<string> {
-  const baseUrl = config.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+  let baseUrl = config.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+  baseUrl = baseUrl.replace('://localhost', '://127.0.0.1')
   const response = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -76,9 +45,10 @@ async function queryOpenAI(config: { baseUrl: string; apiKey: string; model: str
       'Authorization': `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify({
-      model: config.model,
+      model: config.model || 'local-model',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
+      max_tokens: 4096,
     }),
     signal,
   })
@@ -99,7 +69,8 @@ async function queryOpenAI(config: { baseUrl: string; apiKey: string; model: str
 }
 
 async function queryOpenAIChat(config: { baseUrl: string; apiKey: string; model: string }, messages: { role: string; content: string }[], signal: AbortSignal): Promise<string> {
-  const baseUrl = config.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+  let baseUrl = config.baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
+  baseUrl = baseUrl.replace('://localhost', '://127.0.0.1')
   const response = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
@@ -109,9 +80,10 @@ async function queryOpenAIChat(config: { baseUrl: string; apiKey: string; model:
       'Authorization': `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify({
-      model: config.model,
+      model: config.model || 'local-model',
       messages,
       temperature: 0.3,
+      max_tokens: 4096,
     }),
     signal,
   })
@@ -258,8 +230,54 @@ Domina: tuning, procedures, triggers, views, joins complexos, CTEs, paginação.
 Nunca usar SELECT *, criar queries inseguras, ignorar índices.
 REGRAS CRÍTICAS PARA ORACLE: Ao criar/sugerir comandos SQL para bancos ORACLE, NUNCA utilize ANSI Joins (INNER JOIN, LEFT JOIN). Utilize SEMPRE a sintaxe antiga de Joins do Oracle com múltiplas tabelas no FROM e restrições de relação na cláusula WHERE (ex: \`FROM tabela_a a, tabela_b b WHERE a.id = b.id\`).
 O contexto frequentemente proverá um histórico de queries e metadados estruturais (schema). Preste atenção nas tabelas, campos e FUNÇÕES usadas no histórico para fazer melhores recomendações.
-SEMPRE que o usuário pedir para você aprender a estrutura de uma tabela via dblink (ou obter campos/colunas de uma tabela via dblink), VOCÊ DEVE usar a seguinte query como base para buscar os dados:
-\`SELECT column_name, data_type, data_length, nullable FROM all_tab_columns@tasyprod WHERE owner = 'TASY' AND table_name = 'NOME_DA_TABELA' ORDER BY column_id;\`
+
+# PROMPT — ORACLE TASYPROD DBLINK (REGRAS OBRIGATÓRIAS)
+Você está conectado a um banco Oracle Tasy. Você tem acesso a dois tipos de objetos:
+1. **Objetos locais** (no banco que você está conectado diretamente) — NÃO usam @tasyprod
+2. **Objetos remotos via dblink** (no banco Tasy de produção) — usam @tasyprod
+
+REGRAS DE DECISÃO — QUANDO USAR DBLINK:
+- Se a consulta for para o banco Tasy (tabelas do sistema Tasy como pacientes, atendimentos, guias, contas, faturamento, etc), use \`tasy.NOME_TABELA@tasyprod\`
+- Se a consulta for para tabelas locais do banco conectado (tabelas próprias do sistema, relatórios customizados, tabelas de outros sistemas), NÃO use @tasyprod
+- Se você não tem certeza, siga esta lógica:
+  a) Tente sem @tasyprod primeiro (consulta local)
+  b) Se der erro "table or view not found", tente com @tasyprod: \`tasy.NOME_TABELA@tasyprod\`
+  c) Se der erro novamente, verifique o nome correto da tabela consultando \`SELECT table_name FROM all_tables@tasyprod WHERE owner = 'TASY' AND table_name LIKE '%PALAVRA_CHAVE%'\`
+
+SINTAXE CORRETA:
+- Tabela via dblink: \`tasy.nome_da_tabela@tasyprod\` (sempre com \`tasy.\` antes e \`@tasyprod\` depois)
+- Função via dblink: \`tasy.nome_pacote.nome_funcao@tasyprod(parametros)\`
+- Exemplo correto: \`SELECT * FROM tasy.pacientes@tasyprod WHERE cod_paciente = 1234\`
+- Exemplo correto: \`SELECT p.nome, a.cod_atendimento FROM tasy.pacientes@tasyprod p, tasy.atendimentos@tasyprod a WHERE p.cod_paciente = a.cod_paciente\`
+- Exemplo ERRADO (nunca faça): \`SELECT * FROM pacientes@tasyprod\` — falta o \`tasy.\` antes do nome
+- Exemplo ERRADO (nunca faça): \`SELECT * FROM tasy.pacientes\` — falta o \`@tasyprod\` depois
+
+PARA DESCOBRIR ESTRUTURA DE TABELAS:
+- \`SELECT column_name, data_type, data_length, nullable FROM all_tab_columns@tasyprod WHERE owner = 'TASY' AND table_name = 'NOME_DA_TABELA' ORDER BY column_id\`
+- \`SELECT column_name, data_type FROM all_tab_columns WHERE owner = 'SEU_OWNER' AND table_name = 'NOME_TABELA_LOCAL' ORDER BY column_id\`
+
+PARA DESCOBRIR TABELAS EXISTENTES:
+- No Tasy: \`SELECT table_name FROM all_tables@tasyprod WHERE owner = 'TASY' AND table_name LIKE '%TERMO%'\`
+- Local: \`SELECT table_name FROM all_tables WHERE owner = 'SEU_OWNER' AND table_name LIKE '%TERMO%'\`
+
+AUTO-CORREÇÃO OBRIGATÓRIA (SEMPRE SIGA ESTE FLUXO):
+Quando você receber um erro de SQL, VOCÊ DEVE automaticamente:
+1. Analisar a mensagem de erro (ORA-XXXXX)
+2. Se for ORA-00942 (table/view not found): 
+   - Se você NÃO usou @tasyprod, tente adicionar: \`tasy.NOME@tasyprod\`
+   - Se você já usou @tasyprod e ainda dá erro, o nome da tabela está errado — busque o nome correto
+3. Se for ORA-00904 (invalid identifier / coluna não existe):
+   - Investigue as colunas reais da tabela com \`SELECT column_name FROM all_tab_columns@tasyprod WHERE table_name = 'NOME_TABELA'\`
+   - Descubra o nome correto da coluna e ajuste a query
+4. Se for ORA-00933 (SQL command not properly ended): você usou ANSI JOIN — troque para sintaxe Oracle antiga
+5. Tente novamente com a correção. REPITA até funcionar ou até você descobrir o problema
+
+REGRAS DE ENTREGA FINAL:
+- Depois de executar SQL com sucesso e obter os dados, VOCÊ DEVE SEMPRE entregar a resposta final ao usuário
+- NUNCA pare no meio — se você executou uma query, mostrou os dados, agora conclua o raciocínio
+- NUNCA responda apenas com "vou buscar" ou "vou fazer" — execute e entregue
+- Se você está no meio de uma análise e o resultado está ficando longo, finalize mesmo assim
+- Quando tiver o resultado, responda em texto normal com a resposta completa
 
 # PROMPT — SECURITY ENGINEER ELITE
 Você é um engenheiro de segurança especialista em desenvolvimento seguro.
@@ -278,8 +296,14 @@ Usa hierarquia visual correta, espaçamentos profissionais, interfaces fluidas, 
 
 # PROMPT — BI & DASHBOARD SPECIALIST ELITE
 Especialista em Business Intelligence, Analytics e Dashboards empresariais.
-Você cria dashboards lindos, profissionais e responsivos usando bibliotecas modernas e gratuitas (como Recharts, Chart.js, Tremor, Nivo ou Apache ECharts).
-Sempre prioriza visualizações de dados interativas, limpas, minimalistas e que gerem valor, com foco em métricas claras (KPIs).
+Você cria dashboards lindos, profissionais e responsivos. 
+REGRAS DE SEGURANÇA IMPORTANTES:
+1. Crie APENAS UM ÚNICO arquivo HTML completo, salve dentro do projeto atual.
+2. NUNCA crie múltiplos arquivos tentando "acertar" — entregue o dashboard completo de uma vez.
+3. NUNCA repita a criação do mesmo arquivo. Se um dashboard já foi criado, informe ao usuário.
+4. Use Chart.js, ECharts ou bibliotecas similares via CDN, com design dark mode moderno.
+5. O código HTML deve ser completo e funcional em um único arquivo.
+6. NÃO gere dashboards em Desktop, Downloads ou diretório do sistema — sempre no projeto.
 
 # PROMPT — AI SOFTWARE ARCHITECT
 Arquiteto de software especialista em sistemas modernos escaláveis. Pensa como CTO, arquiteto enterprise.
@@ -326,7 +350,16 @@ If you DO NOT need to execute any actions, you can just return normal text/markd
 
 IMPORTANTE: Responda em português do Brasil. Não fique repetindo seu nome ou se apresentando em toda mensagem; só mencione o nome Ezek se o usuário perguntar quem você é ou se isso for realmente necessário.
 REGRA DE OURO: NUNCA inicie a conversa listando todas as suas habilidades. Seja extremamente direto, conciso e minimalista nas suas respostas. Se o usuário disser apenas 'oi', responda apenas com um cumprimento amigável e breve, sem textões.
-PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de ponta a ponta ou até encontrar um bloqueio real que precise de ação do usuário. Não pare após análise parcial. Depois de executar ações, use o feedback para corrigir erros, continuar os próximos passos e retornar uma conclusão clara do que foi feito.`
+PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de ponta a ponta ou até encontrar um bloqueio real que precise de ação do usuário. Não pare após análise parcial. Depois de executar ações, use o feedback para corrigir erros, continuar os próximos passos e retornar uma conclusão clara do que foi feito.
+
+REGRA CRÍTICA - EXECUÇÃO IMEDIATA DE SQL: Quando o usuário pedir para buscar/consultar dados em banco de dados (especialmente Oracle Tasy), você DEVE:
+1. Executar o SQL IMEDIATAMENTE usando o formato JSON com action "execute_sql"
+2. NUNCA responda apenas com "vou buscar", "vou consultar", "vou fazer", "deixe-me buscar" ou similar sem executar a ação
+3. Se você errou o SQL, receberá um erro de feedback - CORRIJA e tente novamente
+4. Depois de obter os dados com sucesso, apresente o resultado ao usuário em texto normal
+5. Exemplo CORRETO: {"message": "Buscando dados...", "actions": [{"type": "execute_sql", "query": "SELECT * FROM tabela@tasyprod WHERE ..."}]}
+6. Exemplo ERRADO (não faça isso): "Vou buscar os dados..." (sem a action JSON)
+REGRA DE OURO SQL: NUNCA diga que VAI fazer algo que você pode fazer agora. Simplesmente FAÇA usando a action JSON.`
 
     let workspaceContext = '';
     if (workspacePath) {
@@ -341,14 +374,15 @@ PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de 
 
     const fullPrompt = `${systemPrompt}${workspaceContext}\n\nProject context: ${JSON.stringify(history.slice(-10))}\n\nUser: ${message}\n\nAssistant:`
 
-    if (config.provider === 'routeway' || config.provider === 'openrouter' || config.provider === 'deepsproxy' || config.provider === 'kimiproxy' || config.provider === 'geminiproxy' || config.provider === 'custom' || config.provider === 'openai') {
+    if (config.provider === 'routeway' || config.provider === 'openrouter' || config.provider === 'lmstudio' || config.provider === 'deepseek' || config.provider === 'custom' || config.provider === 'openai' || config.provider === 'opencode' || config.provider === 'groq') {
       try {
         let baseUrl = 'https://api.routeway.ai/v1'
         if (config.provider === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1'
+        if (config.provider === 'opencode') baseUrl = config.baseUrl || 'https://api.opencode.ai/v1'
         if (config.provider === 'openai') baseUrl = config.baseUrl || 'https://api.openai.com/v1'
-        if (config.provider === 'deepsproxy') baseUrl = 'http://localhost:3000/v1'
-        if (config.provider === 'kimiproxy') baseUrl = 'http://localhost:3000/v1'
-        if (config.provider === 'geminiproxy') baseUrl = 'http://localhost:3000/v1'
+        if (config.provider === 'lmstudio') baseUrl = config.baseUrl || 'http://localhost:1234/v1'
+        if (config.provider === 'deepseek') baseUrl = config.baseUrl || 'https://api.deepseek.com/v1'
+        if (config.provider === 'groq') baseUrl = config.baseUrl || 'https://api.groq.com/openai/v1'
         if (config.provider === 'custom') baseUrl = config.baseUrl || baseUrl
 
         const chatMessages = [
@@ -373,7 +407,7 @@ PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de 
         return response
       } catch (err: any) {
         if (err.name === 'AbortError') return 'Request cancelled'
-        const providerName = config.provider === 'routeway' ? 'RouteWay' : config.provider === 'openrouter' ? 'OpenRouter' : config.provider === 'openai' ? 'OpenAI' : config.provider === 'kimiproxy' ? 'KimiProxy' : config.provider === 'geminiproxy' ? 'GeminiProxy' : config.provider === 'custom' ? 'Custom API' : 'DeepsProxy'
+        const providerName = config.provider === 'routeway' ? 'RouteWay' : config.provider === 'openrouter' ? 'OpenRouter' : config.provider === 'opencode' ? 'Open Code' : config.provider === 'openai' ? 'OpenAI' : config.provider === 'lmstudio' ? 'LM Studio' : config.provider === 'deepseek' ? 'DeepSeek' : config.provider === 'groq' ? 'Groq' : config.provider === 'custom' ? 'Custom API' : config.provider
         throw new Error(`${providerName}: ${err.message || 'Connection failed.'}`)
       }
     }
@@ -411,16 +445,16 @@ PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de 
         const response = await fetch(`${cleanBaseUrl}/api/tags`)
         return { ok: response.ok, error: response.ok ? undefined : 'Ollama não respondeu corretamente.' }
       }
-      
+
       let baseUrl = config.baseUrl || 'https://api.openai.com/v1'
       if (config.provider === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1'
+      if (config.provider === 'lmstudio') baseUrl = 'http://localhost:1234/v1'
+      if (config.provider === 'deepseek') baseUrl = 'https://api.deepseek.com/v1'
+      if (config.provider === 'groq') baseUrl = 'https://api.groq.com/openai/v1'
       if (config.provider === 'routeway') baseUrl = 'https://api.routeway.ai/v1'
-      if (config.provider === 'deepsproxy') baseUrl = 'http://localhost:3000/v1'
-      if (config.provider === 'kimiproxy') baseUrl = 'http://localhost:3000/v1'
-      if (config.provider === 'geminiproxy') baseUrl = 'http://localhost:3000/v1'
-      
+
       const formattedBaseUrl = baseUrl.replace(/\/+$/, '').replace(/\/v1$/, '')
-      
+
       if (config.model) {
         const response = await fetch(`${formattedBaseUrl}/v1/chat/completions`, {
           method: 'POST',
@@ -437,9 +471,9 @@ PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de 
           }),
           signal: AbortSignal.timeout(10000),
         })
-        
+
         if (response.ok) return { ok: true }
-        
+
         const data = await response.json().catch(() => ({}))
         const errorMsg = data.error?.message || data.error || `HTTP ${response.status}`
         return { ok: false, error: String(errorMsg) }
@@ -476,7 +510,24 @@ PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de 
     }
   })
 
+  // SAFETY LIST: diretórios do sistema onde a IA não pode escrever
+  const AI_BLOCKED_DIRECTORIES = [
+    'Desktop', 'Documentos', 'Documents', 'Downloads', 'AppData',
+    'Program Files', 'Windows', 'System32', '.npm', '.cargo', '.rustup',
+    '.nvm', '.pyenv', '.conda', '.gradle', '.m2', '.sdkman',
+  ];
+
   ipcMain.handle(IPC_CHANNELS.AI_WRITE_FILE, async (_event, filePath: string, content: string) => {
+    // SAFETY: verificar se o caminho está em diretório bloqueado
+    const normalized = filePath.replace(/\\/g, '/');
+    const isBlocked = AI_BLOCKED_DIRECTORIES.some(dir => {
+      const pattern = new RegExp(`[/\\\\]${dir}[/\\\\]`);
+      return pattern.test(filePath) || pattern.test(normalized);
+    });
+    if (isBlocked) {
+      return { success: false, error: `Escrita em diretório do sistema bloqueada por segurança. A IA só pode criar arquivos dentro do diretório do projeto.` };
+    }
+
     const dir = path.dirname(filePath)
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
@@ -544,7 +595,7 @@ PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de 
       })
       const data = await response.json()
       const allModels = data.data || []
-      
+
       const freeModels = allModels.filter((m: any) => {
         return m.pricing?.prompt === '0' && m.pricing?.completion === '0'
       })
@@ -558,272 +609,6 @@ PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de 
     } catch (err) {
       console.error('Failed to fetch OpenRouter models:', err)
       return []
-    }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_LIST_DEEPSPROXY_MODELS, async () => {
-    try {
-      const response = await fetch('http://localhost:3000/v1/models', {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(5000),
-      })
-      const data = await response.json()
-      const allModels = data.data || []
-      
-      return allModels.map((m: any) => ({
-        id: m.id || m.name || '',
-        name: (m.id || '').toUpperCase().replace(/-/g, ' '),
-        free: true,
-        description: `Local DeepsProxy Model: ${m.id}`,
-      }))
-    } catch (err: any) {
-      if (err?.cause?.code !== 'ECONNREFUSED') console.error('Failed to fetch DeepsProxy models:', err?.message || err)
-      return [
-        { id: 'deepseek-v4-flash', name: 'Deepseek V4 Flash', free: true, description: 'Local proxy' },
-        { id: 'deepseek-v4-flash-thinking', name: 'Deepseek V4 Flash Thinking', free: true, description: 'Local proxy with reasoning' },
-        { id: 'deepseek-v4-pro', name: 'Deepseek V4 Pro', free: true, description: 'Local proxy pro' },
-        { id: 'deepseek-v4-pro-thinking', name: 'Deepseek V4 Pro Thinking', free: true, description: 'Local proxy pro with reasoning' },
-      ]
-    }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_CHECK_DEEPSPROXY, async () => {
-    try {
-      const home = os.homedir()
-      const targetDir = path.join(home, '.ezek-editor', 'deepsproxy')
-      const packageJsonPath = path.join(targetDir, 'package.json')
-      
-      const installed = fs.existsSync(packageJsonPath)
-      return { installed, path: targetDir }
-    } catch {
-      return { installed: false, path: '' }
-    }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_INSTALL_DEEPSPROXY, async (event) => {
-    return new Promise((resolve) => {
-      const home = os.homedir()
-      const sendLog = (text: string) => {
-        event.sender.send('ai:installLog', text)
-      }
-
-      const targetDir = path.join(home, '.ezek-editor')
-      if (!fs.existsSync(targetDir)) {
-        try { fs.mkdirSync(targetDir, { recursive: true }) } catch (e) {}
-      }
-
-      const commands = [
-        `cd /d "${targetDir}"`,
-        `if exist deepsproxy (rmdir /s /q deepsproxy)`,
-        `git clone https://github.com/pedrofariasx/deepsproxy.git`,
-        `cd deepsproxy`,
-        `npm install`,
-        `npx playwright install`
-      ]
-
-      const env = { ...process.env }
-      const pathKey = Object.keys(env).find(k => k.toLowerCase() === 'path') || 'PATH'
-      const currentPath = env[pathKey] || ''
-      if (process.platform === 'win32' && !currentPath.toLowerCase().includes('git\\cmd')) {
-        env[pathKey] = `${currentPath};C:\\Program Files\\Git\\cmd`
-      }
-
-      const child = spawn(commands.join(' && '), { cwd: targetDir, shell: true, env })
-      child.stdout.on('data', d => sendLog(d.toString()))
-      child.stderr.on('data', d => sendLog(d.toString()))
-      child.on('close', code => resolve(code === 0))
-      child.on('error', err => {
-        sendLog(`Error: ${err.message}`)
-        resolve(false)
-      })
-    })
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_LIST_KIMIPROXY_MODELS, async () => {
-    try {
-      const response = await fetch('http://localhost:3000/v1/models', {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(5000),
-      })
-      const data = await response.json()
-      const allModels = data.data || []
-      
-      return allModels.map((m: any) => ({
-        id: m.id || m.name || '',
-        name: (m.id || '').toUpperCase().replace(/-/g, ' '),
-        free: true,
-        description: `Local KimiProxy Model: ${m.id}`,
-      }))
-    } catch (err: any) {
-      if (err?.cause?.code !== 'ECONNREFUSED') console.error('Failed to fetch KimiProxy models:', err?.message || err)
-      return [
-        { id: 'moonshot-v1-8k', name: 'Moonshot V1 8K', free: true, description: 'Local proxy' },
-        { id: 'moonshot-v1-32k', name: 'Moonshot V1 32K', free: true, description: 'Local proxy' },
-        { id: 'moonshot-v1-128k', name: 'Moonshot V1 128K', free: true, description: 'Local proxy' },
-      ]
-    }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_CHECK_KIMIPROXY, async () => {
-    try {
-      const home = os.homedir()
-      const targetDir = path.join(home, '.ezek-editor', 'kimiproxy')
-      const packageJsonPath = path.join(targetDir, 'package.json')
-      
-      const installed = fs.existsSync(packageJsonPath)
-      return { installed, path: targetDir }
-    } catch {
-      return { installed: false, path: '' }
-    }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_INSTALL_KIMIPROXY, async (event) => {
-    return new Promise((resolve) => {
-      const home = os.homedir()
-      const sendLog = (text: string) => {
-        event.sender.send('ai:installLog', text)
-      }
-
-      const targetDir = path.join(home, '.ezek-editor')
-      if (!fs.existsSync(targetDir)) {
-        try { fs.mkdirSync(targetDir, { recursive: true }) } catch (e) {}
-      }
-
-      const commands = [
-        `cd /d "${targetDir}"`,
-        `rmdir /s /q kimiproxy 2>nul`,
-        `git clone https://github.com/pedrofariasx/kimiproxy.git`,
-        `cd kimiproxy`,
-        `npm install`,
-        `npx playwright install`
-      ]
-      const commandString = commands[0] + ' & ' + commands[1] + ' & ' + commands.slice(2).join(' && ')
-
-      const env = { ...process.env }
-      const pathKey = Object.keys(env).find(k => k.toLowerCase() === 'path') || 'PATH'
-      const currentPath = env[pathKey] || ''
-      if (process.platform === 'win32' && !currentPath.toLowerCase().includes('git\\cmd')) {
-        env[pathKey] = `${currentPath};C:\\Program Files\\Git\\cmd`
-      }
-
-      const child = spawn(commandString, { cwd: targetDir, shell: true, env })
-      child.stdout.on('data', d => sendLog(d.toString()))
-      child.stderr.on('data', d => sendLog(d.toString()))
-      child.on('close', code => resolve(code === 0))
-      child.on('error', err => {
-        sendLog(`Error: ${err.message}`)
-        resolve(false)
-      })
-    })
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_LIST_GEMINIPROXY_MODELS, async () => {
-    try {
-      const response = await fetch('http://localhost:3000/v1/models', {
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(5000),
-      })
-      const data = await response.json()
-      const allModels = data.data || []
-      
-      return allModels.map((m: any) => ({
-        id: m.id || m.name || '',
-        name: (m.id || '').toUpperCase().replace(/-/g, ' '),
-        free: true,
-        description: `Local GeminiProxy Model: ${m.id}`,
-      }))
-    } catch (err: any) {
-      if (err?.cause?.code !== 'ECONNREFUSED' && err?.cause?.code !== 'ECONNRESET') console.error('Failed to fetch GeminiProxy models:', err?.message || err)
-      return [
-        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', free: true, description: 'Local proxy' },
-        { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', free: true, description: 'Local proxy' },
-        { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', free: true, description: 'Local proxy' },
-      ]
-    }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_CHECK_GEMINIPROXY, async () => {
-    try {
-      const home = os.homedir()
-      const targetDir = path.join(home, '.ezek-editor', 'geminiproxy')
-      const packageJsonPath = path.join(targetDir, 'package.json')
-      
-      const installed = fs.existsSync(packageJsonPath)
-      return { installed, path: targetDir }
-    } catch {
-      return { installed: false, path: '' }
-    }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_INSTALL_GEMINIPROXY, async (event) => {
-    return new Promise((resolve) => {
-      const home = os.homedir()
-      const sendLog = (text: string) => {
-        event.sender.send('ai:installLog', text)
-      }
-
-      const targetDir = path.join(home, '.ezek-editor')
-      if (!fs.existsSync(targetDir)) {
-        try { fs.mkdirSync(targetDir, { recursive: true }) } catch (e) {}
-      }
-
-      const commands = [
-        `cd /d "${targetDir}"`,
-        `rmdir /s /q geminiproxy 2>nul`,
-        `git clone https://github.com/scripteros/geminiproxy.git`,
-        `cd geminiproxy`,
-        `npm install`,
-        `npx playwright install`
-      ]
-      const commandString = commands[0] + ' & ' + commands[1] + ' & ' + commands.slice(2).join(' && ')
-
-      const env = { ...process.env }
-      const pathKey = Object.keys(env).find(k => k.toLowerCase() === 'path') || 'PATH'
-      const currentPath = env[pathKey] || ''
-      if (process.platform === 'win32' && !currentPath.toLowerCase().includes('git\\cmd')) {
-        env[pathKey] = `${currentPath};C:\\Program Files\\Git\\cmd`
-      }
-
-      const child = spawn(commandString, { cwd: targetDir, shell: true, env })
-      child.stdout.on('data', d => sendLog(d.toString()))
-      child.stderr.on('data', d => sendLog(d.toString()))
-      child.on('close', code => resolve(code === 0))
-      child.on('error', err => {
-        sendLog(`Error: ${err.message}`)
-        resolve(false)
-      })
-    })
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_UNINSTALL_PROXY, async (_event, proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => {
-    try {
-      const allowed = new Set(['deepsproxy', 'kimiproxy', 'geminiproxy'])
-      if (!allowed.has(proxyType)) return false
-
-      const runningProcess = getProxyProcess(proxyType)
-      if (runningProcess) {
-        killProxyProcess(runningProcess)
-        clearProxyProcess(proxyType)
-      }
-
-      try {
-        await fetch('http://localhost:3000/shutdown', { method: 'POST', signal: AbortSignal.timeout(1500) }).catch(() => {})
-      } catch {}
-
-      const baseDir = path.join(os.homedir(), '.ezek-editor')
-      const targetDir = path.resolve(baseDir, proxyType)
-      const resolvedBase = path.resolve(baseDir)
-      if (!targetDir.startsWith(resolvedBase + path.sep)) return false
-
-      if (fs.existsSync(targetDir)) {
-        fs.rmSync(targetDir, { recursive: true, force: true })
-      }
-
-      emitProxyStatus(proxyType, 'offline')
-      return true
-    } catch (err) {
-      console.error(`Failed to uninstall ${proxyType}:`, err)
-      return false
     }
   })
 
@@ -868,140 +653,28 @@ PERSISTÊNCIA: Quando assumir uma tarefa, continue trabalhando até concluir de 
     }
   })
 
-  ipcMain.handle(IPC_CHANNELS.AI_START_PROXY, async (_event, proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => {
-    const PROXY_PORT = 3000
+  // Handler para salvar HTML do dashboard na área de trabalho e abrir no navegador
+  ipcMain.handle(IPC_CHANNELS.AI_SAVE_AND_OPEN_DASHBOARD, async (_event, htmlContent: string) => {
     try {
-      const homeDir = os.homedir()
-      const proxyPath = path.join(homeDir, '.ezek-editor', proxyType)
-
-      // Stop ALL other proxies first (mutual exclusion — all share port 3000)
-      if (proxyType !== 'deepsproxy' && deepsProxyProcess) {
-        killProxyProcess(deepsProxyProcess)
-        deepsProxyProcess = null
-        emitProxyStatus('deepsproxy', 'offline')
-      }
-      if (proxyType !== 'kimiproxy' && kimiProxyProcess) {
-        killProxyProcess(kimiProxyProcess)
-        kimiProxyProcess = null
-        emitProxyStatus('kimiproxy', 'offline')
-      }
-      if (proxyType !== 'geminiproxy' && geminiProxyProcess) {
-        killProxyProcess(geminiProxyProcess)
-        geminiProxyProcess = null
-        emitProxyStatus('geminiproxy', 'offline')
-      }
-
-      // If THIS proxy is already running, return true
-      if (proxyType === 'deepsproxy' && deepsProxyProcess) return true
-      if (proxyType === 'kimiproxy' && kimiProxyProcess) return true
-      if (proxyType === 'geminiproxy' && geminiProxyProcess) return true
-
-      // Force-kill anything on port 3000 before starting (handles orphan processes)
-      try {
-        await fetch(`http://localhost:${PROXY_PORT}/shutdown`, { method: 'POST', signal: AbortSignal.timeout(2000) }).catch(() => {})
-        await new Promise(r => setTimeout(r, 500))
-      } catch (e) {}
-
-      // Force-kill by PID on Windows if port is still occupied
-      if (process.platform === 'win32') {
-        try {
-          const { stdout } = await execAsync(`netstat -ano | findstr :${PROXY_PORT} | findstr LISTENING`, { timeout: 5000 })
-          const lines = stdout.trim().split('\n')
-          for (const line of lines) {
-            const pid = line.trim().split(/\s+/).pop()
-            if (pid && /^\d+$/.test(pid) && pid !== '0') {
-              try { await execAsync(`taskkill /PID ${pid} /F`, { timeout: 5000 }) } catch (e) {}
-            }
-          }
-          await new Promise(r => setTimeout(r, 500))
-        } catch (e) { /* no process on port, that's fine */ }
-      }
-
-      if (!fs.existsSync(proxyPath)) {
-        console.error(`Proxy path does not exist: ${proxyPath}`)
-        return false
-      }
-
-      const env = { ...process.env, PORT: String(PROXY_PORT) }
+      const desktopPath = path.join(os.homedir(), 'Desktop')
+      const filename = `dashboard_${Date.now()}.html`
+      const filePath = path.join(desktopPath, filename)
       
-      const child = spawn(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['start'], {
-        cwd: proxyPath,
-        detached: false,
-        shell: process.platform === 'win32',
-        env
-      })
-
-      child.stdout?.on('data', (data) => {
-        const out = data.toString()
-        if (out.includes('Server is running on port') || out.includes('listening') || out.includes('started!') || out.includes('started')) {
-          emitProxyStatus(proxyType, 'online')
-        }
-      })
-
-      child.stderr?.on('data', (data) => {
-        console.error(`[${proxyType} error]: ${data.toString()}`)
-      })
-
-      child.on('close', () => {
-        if (proxyType === 'deepsproxy') deepsProxyProcess = null
-        else if (proxyType === 'kimiproxy') kimiProxyProcess = null
-        else if (proxyType === 'geminiproxy') geminiProxyProcess = null
-        emitProxyStatus(proxyType, 'offline')
-      })
-
-      if (proxyType === 'deepsproxy') deepsProxyProcess = child
-      else if (proxyType === 'kimiproxy') kimiProxyProcess = child
-      else if (proxyType === 'geminiproxy') geminiProxyProcess = child
-
-      return true
-    } catch (e) {
-      console.error('Error starting proxy:', e)
-      return false
+      // Garantir que o diretório Desktop existe
+      if (!fs.existsSync(desktopPath)) {
+        fs.mkdirSync(desktopPath, { recursive: true })
+      }
+      
+      fs.writeFileSync(filePath, htmlContent, 'utf-8')
+      
+      // Abrir no navegador padrão
+      const { shell } = require('electron')
+      await shell.openPath(filePath)
+      
+      return { success: true, filePath, filename }
+    } catch (err: any) {
+      console.error('Error saving dashboard:', err)
+      return { success: false, error: err.message }
     }
-  })
-
-  ipcMain.handle(IPC_CHANNELS.AI_STOP_PROXY, async (_event, proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') => {
-    const PROXY_PORT = 3000
-
-    // Try graceful shutdown first
-    try {
-      await fetch(`http://localhost:${PROXY_PORT}/shutdown`, { method: 'POST', signal: AbortSignal.timeout(2000) }).catch(() => {});
-    } catch (e) {}
-
-    // Give it a short moment to gracefully close playwright
-    await new Promise(r => setTimeout(r, 500));
-
-    if (proxyType === 'deepsproxy' && deepsProxyProcess) {
-      killProxyProcess(deepsProxyProcess)
-      deepsProxyProcess = null
-      emitProxyStatus('deepsproxy', 'offline')
-      return true
-    } else if (proxyType === 'kimiproxy' && kimiProxyProcess) {
-      killProxyProcess(kimiProxyProcess)
-      kimiProxyProcess = null
-      emitProxyStatus('kimiproxy', 'offline')
-      return true
-    } else if (proxyType === 'geminiproxy' && geminiProxyProcess) {
-      killProxyProcess(geminiProxyProcess)
-      geminiProxyProcess = null
-      emitProxyStatus('geminiproxy', 'offline')
-      return true
-    }
-
-    // Fallback: force-kill port 3000 even if we lost the process reference
-    if (process.platform === 'win32') {
-      try {
-        const { stdout } = await execAsync(`netstat -ano | findstr :${PROXY_PORT} | findstr LISTENING`, { timeout: 5000 })
-        const lines = stdout.trim().split('\n')
-        for (const line of lines) {
-          const pid = line.trim().split(/\s+/).pop()
-          if (pid && /^\d+$/.test(pid) && pid !== '0') {
-            try { await execAsync(`taskkill /PID ${pid} /F`, { timeout: 5000 }) } catch (e) {}
-          }
-        }
-      } catch (e) {}
-    }
-    emitProxyStatus(proxyType, 'offline')
-    return true
   })
 }

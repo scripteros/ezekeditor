@@ -133,61 +133,16 @@ const api = {
   aiStartVoiceServer: () =>
     ipcRenderer.invoke('ai:startVoiceServer') as Promise<{ success: boolean; error?: string }>,
 
-  aiListDeepsProxyModels: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_LIST_DEEPSPROXY_MODELS) as Promise<any[]>,
-
-  aiCheckDeepsProxy: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_CHECK_DEEPSPROXY) as Promise<{ installed: boolean, path: string }>,
-
-  aiInstallDeepsProxy: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_INSTALL_DEEPSPROXY) as Promise<boolean>,
-
-  aiListKimiProxyModels: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_LIST_KIMIPROXY_MODELS) as Promise<any[]>,
-
-  aiCheckKimiProxyInstalled: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_CHECK_KIMIPROXY) as Promise<{ installed: boolean, path: string }>,
-
-  aiInstallKimiProxy: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_INSTALL_KIMIPROXY) as Promise<boolean>,
-
-  aiListGeminiProxyModels: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_LIST_GEMINIPROXY_MODELS) as Promise<any[]>,
-
-  aiCheckGeminiProxyInstalled: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_CHECK_GEMINIPROXY) as Promise<{ installed: boolean, path: string }>,
-
-  aiInstallGeminiProxy: () =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_INSTALL_GEMINIPROXY) as Promise<boolean>,
-
-  aiUninstallProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_UNINSTALL_PROXY, proxyType) as Promise<boolean>,
-
-  aiStartProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_START_PROXY, proxyType) as Promise<boolean>,
-
-  aiStopProxy: (proxyType: 'deepsproxy' | 'kimiproxy' | 'geminiproxy') =>
-    ipcRenderer.invoke(IPC_CHANNELS.AI_STOP_PROXY, proxyType) as Promise<boolean>,
-
   osShowItemInFolder: (path: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.OS_SHOW_ITEM_IN_FOLDER, path) as Promise<void>,
 
-  onAiInstallLog: (callback: (log: string) => void) => {
-    const handler = (_event: any, log: string) => callback(log)
-    ipcRenderer.on('ai:installLog', handler)
-    return () => ipcRenderer.removeListener('ai:installLog', handler)
-  },
+  aiSaveAndOpenDashboard: (htmlContent: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.AI_SAVE_AND_OPEN_DASHBOARD, htmlContent) as Promise<{ success: boolean; filePath?: string; filename?: string; error?: string }>,
 
   onAiStreamEvent: (callback: (event: any) => void) => {
     const handler = (_event: any, data: any) => callback(data)
     ipcRenderer.on('ai:streamEvent', handler)
     return () => ipcRenderer.removeListener('ai:streamEvent', handler)
-  },
-
-  onProxyStatusChange: (callback: (proxyType: string, status: 'online' | 'offline' | 'error') => void) => {
-    const handler = (_event: any, proxyType: string, status: 'online' | 'offline' | 'error') => callback(proxyType, status)
-    ipcRenderer.on('ai:proxyStatusChange', handler)
-    return () => ipcRenderer.removeListener('ai:proxyStatusChange', handler)
   },
 
   watchDirectory: (dirPath: string) =>
@@ -223,11 +178,11 @@ const api = {
   sqlTestRedisConnection: (config: any) =>
     ipcRenderer.invoke(IPC_CHANNELS.SQL_TEST_REDIS_CONNECTION, config) as Promise<{ success: boolean; error?: string }>,
 
-  sqlExecuteQuery: (config: any, query: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.SQL_EXECUTE_QUERY, config, query) as Promise<any>,
+  sqlExecuteQuery: (config: any, query: string, userId?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SQL_EXECUTE_QUERY, config, query, userId) as Promise<any>,
 
-  sqlGetCache: (config: any) =>
-    ipcRenderer.invoke(IPC_CHANNELS.SQL_GET_CACHE, config) as Promise<any[]>,
+  sqlGetCache: (config: any, userId?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SQL_GET_CACHE, config, userId) as Promise<any[]>,
 
   sqlCancelQuery: (config: any) =>
     ipcRenderer.invoke(IPC_CHANNELS.SQL_CANCEL_QUERY, config) as Promise<void>,
@@ -238,8 +193,38 @@ const api = {
   securityStopProxy: () =>
     ipcRenderer.invoke(IPC_CHANNELS.SECURITY_STOP_PROXY) as Promise<boolean>,
 
-  securityOpenBrowser: (port: number) =>
-    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_OPEN_BROWSER, port) as Promise<boolean>,
+  securityOpenBrowser: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_OPEN_BROWSER) as Promise<{ ok: boolean; partition: string }>,
+
+  securityStartMonitoring: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_START_MONITORING) as Promise<{ ok: boolean; partition: string }>,
+
+  securityStopMonitoring: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_STOP_MONITORING) as Promise<boolean>,
+
+  securityGetCookies: (url?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_GET_COOKIES, url) as Promise<any[]>,
+
+  securityClearBrowserData: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_CLEAR_BROWSER_DATA) as Promise<boolean>,
+
+  securityReplayRequest: (request: { method: string; url: string; headers?: Record<string, string>; body?: string }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_REPLAY_REQUEST, request) as Promise<any>,
+
+  securityPentestRequest: (options: { url: string; method?: string; headers?: Record<string, string>; body?: string; timeout?: number }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_PENTEST_REQUEST, options) as Promise<{ status: number; statusText: string; headers: Record<string, string>; body: string; durationMs: number }>,
+
+  securityStartMitm: (port?: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_START_MITM, port) as Promise<{ ok: boolean; port: number; caPath: string; proxyRules: string }>,
+
+  securityStopMitm: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_STOP_MITM) as Promise<boolean>,
+
+  securityOpenCaCert: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_OPEN_CA_CERT) as Promise<string | null>,
+
+  securityOpenHtmlInBrowser: (htmlContent: string, filename?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_OPEN_HTML_IN_BROWSER, htmlContent, filename) as Promise<string>,
 
   onSecurityRequestCaptured: (callback: (req: any) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
@@ -253,6 +238,27 @@ const api = {
     return () => ipcRenderer.removeListener(IPC_CHANNELS.SECURITY_RESPONSE_CAPTURED, handler)
   },
 
+  onSecurityBrowserEvent: (callback: (event: any) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
+    ipcRenderer.on(IPC_CHANNELS.SECURITY_BROWSER_EVENT, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.SECURITY_BROWSER_EVENT, handler)
+  },
+
+  securityInterceptEnable: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_INTERCEPT_ENABLE) as Promise<boolean>,
+
+  securityInterceptDisable: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_INTERCEPT_DISABLE) as Promise<boolean>,
+
+  securityInterceptAction: (action: { interceptId: string; type: 'forward' | 'drop'; method?: string; url?: string; headers?: Record<string, string>; body?: string }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SECURITY_INTERCEPT_ACTION, action) as Promise<boolean>,
+
+  onSecurityInterceptPending: (callback: (data: any) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
+    ipcRenderer.on(IPC_CHANNELS.SECURITY_INTERCEPT_PENDING, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.SECURITY_INTERCEPT_PENDING, handler)
+  },
+
   ldapConnect: (config: any) =>
     ipcRenderer.invoke(IPC_CHANNELS.LDAP_CONNECT, config) as Promise<{ success: boolean; error?: string }>,
 
@@ -264,6 +270,15 @@ const api = {
 
   ldapSearchGroups: (filter?: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.LDAP_SEARCH_GROUPS, filter) as Promise<{ success: boolean; data?: any[]; error?: string }>,
+
+  authInit: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTH_INIT) as Promise<{ success: boolean; error?: string }>,
+
+  authLogin: (data: { usuario: string; senha: string }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTH_LOGIN, data) as Promise<{ success: boolean; user?: { id: number; nome: string; usuario: string }; error?: string }>,
+
+  authRegister: (data: { nome: string; usuario: string; senha: string }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTH_REGISTER, data) as Promise<{ success: boolean; user?: { nome: string; usuario: string }; error?: string }>,
 }
 
 

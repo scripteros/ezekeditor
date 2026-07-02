@@ -3002,21 +3002,67 @@ def usuario():
                                 <h4 className="text-[12px] font-semibold text-nova-text">{finding.title}</h4>
                                 <p className="text-[11px] text-nova-text-secondary mt-1">{finding.description}</p>
                                 {finding.payload && (
-                                  <div className="mt-1">
-                                    <code className="text-[10px] bg-[#0a0f0d] px-1.5 py-0.5 rounded text-red-300">{finding.payload}</code>
+                                  <div className="mt-1 flex items-center gap-2 group/payload">
+                                    <code className="text-[10px] bg-[#0a0f0d] px-1.5 py-0.5 rounded text-red-300 break-all flex-1">{finding.payload}</code>
+                                    <button
+                                      onClick={() => navigator.clipboard.writeText(finding.payload)}
+                                      className="shrink-0 opacity-0 group-hover/payload:opacity-100 text-nova-text-muted hover:text-nova-accent transition-opacity"
+                                      title="Copiar payload"
+                                    >
+                                      <Copy size={10} />
+                                    </button>
                                   </div>
                                 )}
-                                <div className="mt-1">
-                                  <code className="text-[10px] text-nova-text-muted break-all">{finding.endpoint}</code>
+                                <div className="mt-1 flex items-center gap-2 group/endpoint">
+                                  <code className="text-[10px] text-nova-text-muted break-all flex-1">{finding.endpoint}</code>
+                                  <button
+                                    onClick={() => navigator.clipboard.writeText(finding.endpoint)}
+                                    className="shrink-0 opacity-0 group-hover/endpoint:opacity-100 text-nova-text-muted hover:text-nova-accent transition-opacity"
+                                    title="Copiar endpoint"
+                                  >
+                                    <Copy size={10} />
+                                  </button>
                                 </div>
                                 <details className="mt-2">
                                   <summary className="text-[10px] text-nova-accent cursor-pointer hover:text-nova-accent/80">Prova de Conceito</summary>
-                                  <pre className="mt-1 bg-[#0a0f0d] p-2 rounded text-[10px] font-mono text-nova-text overflow-auto">{finding.poc}</pre>
+                                  <div className="relative group/poc mt-1">
+                                    <pre className="bg-[#0a0f0d] p-2 rounded text-[10px] font-mono text-nova-text overflow-auto">{finding.poc}</pre>
+                                    <button
+                                      onClick={() => navigator.clipboard.writeText(finding.poc)}
+                                      className="absolute top-1 right-1 opacity-0 group-hover/poc:opacity-100 px-2 py-0.5 bg-nova-accent/20 text-nova-accent rounded text-[9px] hover:bg-nova-accent/30 transition-opacity"
+                                    >
+                                      <Copy size={10} className="inline mr-1" />Copiar PoC
+                                    </button>
+                                  </div>
                                 </details>
                                 <details className="mt-1">
                                   <summary className="text-[10px] text-nova-text-secondary cursor-pointer hover:text-nova-text">Evidência</summary>
-                                  <pre className="mt-1 bg-[#0a0f0d] p-2 rounded text-[10px] font-mono text-nova-text/70 overflow-auto">{finding.evidence}</pre>
+                                  <div className="relative group/ev mt-1">
+                                    <pre className="bg-[#0a0f0d] p-2 rounded text-[10px] font-mono text-nova-text/70 overflow-auto">{finding.evidence}</pre>
+                                    <button
+                                      onClick={() => navigator.clipboard.writeText(finding.evidence)}
+                                      className="absolute top-1 right-1 opacity-0 group-hover/ev:opacity-100 px-2 py-0.5 bg-nova-accent/20 text-nova-accent rounded text-[9px] hover:bg-nova-accent/30 transition-opacity"
+                                    >
+                                      <Copy size={10} className="inline mr-1" />Copiar Evidência
+                                    </button>
+                                  </div>
                                 </details>
+                                {finding.extractedData && (
+                                  <div className="mt-3 border border-green-500/20 rounded-lg bg-green-500/5 p-3">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Database size={14} className="text-green-400" />
+                                      <span className="text-[11px] font-semibold text-green-400">Dados Extraídos do Banco</span>
+                                      <button
+                                        onClick={() => navigator.clipboard.writeText(finding.extractedData || '')}
+                                        className="ml-auto px-2 py-0.5 bg-green-500/15 text-green-400 rounded text-[9px] hover:bg-green-500/25 transition-colors"
+                                      >
+                                        <Copy size={10} className="inline mr-1" />Copiar
+                                      </button>
+                                    </div>
+                                    <pre className="bg-[#0a0f0d] border border-green-500/10 p-3 rounded text-[10px] font-mono text-green-300/90 overflow-auto max-h-[300px] whitespace-pre-wrap">{finding.extractedData}</pre>
+                                    <p className="text-[9px] text-green-400/60 mt-1">Dados obtidos via UNION SELECT. As consultas podem ter extraído informações reais do banco de dados.</p>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>

@@ -377,7 +377,7 @@ export const useAIStore = create<AIState>((set, get) => ({
   sendMessage: async (content: string, attachments?: AIAttachment[], isHiddenSystemMessage = false, depth = 0) => {
     // Profundidade máxima para evitar loop infinito no agentic loop
     if (depth > 3) {
-      set({ isProcessing: false })
+      if (depth === 0) set({ isProcessing: false })
       return
     }
     
@@ -387,7 +387,10 @@ export const useAIStore = create<AIState>((set, get) => ({
     set({ isProcessing: true })
 
     const api = getApi()
-    if (!api) return
+    if (!api) {
+      if (depth === 0) set({ isProcessing: false })
+      return
+    }
 
     if (!isHiddenSystemMessage) {
       const userMsg: AIMessage = {
@@ -595,8 +598,8 @@ Quando seu SQL der erro, você DEVE automaticamente:
 
         const MAX_FILE_WRITES_PER_SESSION = 25;
 
-        // Só executa ações na primeira chamada (depth 0) para evitar loop infinito
-        if (depth === 0 && parsedActions && Array.isArray(parsedActions)) {
+        // Só executa ações nas primeiras chamadas (depth limitado) para evitar loop infinito
+        if (depth < 3 && parsedActions && Array.isArray(parsedActions)) {
           let executedAny = false;
           let fileChanges: { path: string, add: number, del: number, originalContent?: string }[] = [];
           let actionFeedback = '';
@@ -743,11 +746,26 @@ Quando seu SQL der erro, você DEVE automaticamente:
               // Aguarda a resposta para manter isProcessing ativo durante todo o ciclo
               if (actionFeedback.trim().length > 0) {
                 const hasErrors = actionFeedback.includes('[SQL Execution Error]') || actionFeedback.includes('[Error');
-                const prompt = hasErrors
-                  ? `[SYSTEM AUTO-FEEDBACK] Resultado das suas ações:\n${actionFeedback}\n\n${actionFeedback.includes('[SQL Execution Error]') ? '⚠️ O SQL ACUSOU ERRO. Corrija o SQL com base no erro e tente novamente.\n' : ''}Agora, com base nos dados obtidos, responda em texto normal (NÃO use JSON) com a conclusão final para o usuário. Entregue o resultado completo do que foi solicitado. Se houver dados, apresente-os de forma clara. NÃO repita ações, NÃO use JSON.`
-                  : `[SYSTEM AUTO-FEEDBACK] Resultado das suas ações:\n${actionFeedback}\n\nCom base nos dados obtidos acima, responda em texto normal (NÃO use JSON) com a conclusão final para o usuário. Entregue o resultado completo do que foi solicitado. Se houver dados, apresente-os de forma clara.`;
+                
+                // Se já executamos ações nesse ciclo, o próximo nível DEVE concluir
+                let feedbackType = 'success';
+                if (hasErrors) feedbackType = 'error';
+                
+                const prompt = `[SYSTEM FEEDBACK - ${feedbackType === 'error' ? 'ERROR' : 'DADOS OBTIDOS'}]
+
+${actionFeedback}
+
+⚠️ INSTRUÇÃO FINAL (OBRIGATÓRIA):
+${feedbackType === 'error' 
+  ? 'O SQL ACUSOU ERRO. Analise o erro acima, corrija o SQL e execute novamente. NÃO responda com texto, NÃO peça desculpas — apenas corrija e tente de novo.'
+  : 'VOCÊ ACABOU DE RECEBER OS DADOS. AGORA RESPONDA EM TEXTO NORMAL com a conclusão final para o usuário. Não gere JSON. Não gere actions. Não execute mais SQL. Apenas responda com a análise completa dos dados. Se houver dados em formato de tabela, apresente-os de forma legível.'
+}`;
                 await new Promise(resolve => setTimeout(resolve, 500)); // pequena pausa para UI atualizar
                 await get().sendMessage(prompt, undefined, true, depth + 1);
+                
+                // Após o feedback, se ainda estamos em depth 0 e houve ações executadas,
+                // registrar que o ciclo foi concluído — a resposta final já foi adicionada
+                // nos messages pelo sendMessage interno
               }
             }
           }
@@ -776,7 +794,8 @@ Quando seu SQL der erro, você DEVE automaticamente:
       }))
       get().saveChatHistory()
     } finally {
-      set({ isProcessing: false })
+      if (depth === 0) set({ isProcessing: false })
+      // Em depths > 0, isProcessing será limpo pelo depth 0 quando retornar
     }
   },
 

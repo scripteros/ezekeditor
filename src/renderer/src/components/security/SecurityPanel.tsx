@@ -513,7 +513,13 @@ export default function SecurityPanel() {
   const [pentestProgressValue, setPentestProgressValue] = useState(0)
   const [pentestResults, setPentestResults] = useState<PenTestResult | null>(null)
   const [pentestTestingFor, setPentestTestingFor] = useState<'all' | 'sqli' | 'auth-bypass' | 'database-access'>('all')
+  const [pentestFindings, setPentestFindings] = useState<VulnFinding[]>([])
   const pentestEngineRef = useRef<PenTestEngine | null>(null)
+
+  const cancelPentest = () => {
+    pentestEngineRef.current?.cancel()
+    setPentestProgress('⛔ Cancelando...')
+  }
 
   // Limpa todos os dados do site anterior (requests, eventos, auditoria, cookies, storage)
   const clearSiteData = () => {
@@ -901,6 +907,10 @@ ${dynamicRequests.slice(0, 20).map(req => `- ${req.method} ${req.url} -> ${req.s
       setPentestProgressValue(Math.min(progress, 99))
     }
     
+    engine.onFindingsUpdate = (findings) => {
+      setPentestFindings(findings)
+    }
+
     try {
       let result: PenTestResult
       if (testType === 'all') {
@@ -909,7 +919,7 @@ ${dynamicRequests.slice(0, 20).map(req => `- ${req.method} ${req.url} -> ${req.s
         result = await engine.runSingleTest(testType)
       }
       setPentestProgressValue(100)
-      setPentestProgress('✅ Teste concluído!')
+      setPentestProgress(result.cancelled ? '⛔ Teste cancelado. Resultados parciais exibidos.' : '✅ Teste concluído!')
       setPentestResults(result)
     } catch (err) {
       setPentestProgress(`❌ Erro: ${err instanceof Error ? err.message : 'Falha no teste'}`)
@@ -935,10 +945,14 @@ ${dynamicRequests.slice(0, 20).map(req => `- ${req.method} ${req.url} -> ${req.s
       setPentestProgressValue(Math.min(progress, 99))
     }
     
+    engine.onFindingsUpdate = (findings) => {
+      setPentestFindings(findings)
+    }
+
     try {
       const result = await engine.runFullScan()
       setPentestProgressValue(100)
-      setPentestProgress('✅ Varredura concluída! Enviando para IA analista...')
+      setPentestProgress(result.cancelled ? '⛔ Cancelado.' : '✅ Varredura concluída! Enviando para IA analista...')
       setPentestResults(result)
       
       // Depois envia o resultado para IA analisar
@@ -2910,7 +2924,24 @@ def usuario():
               <section className="border border-nova-border rounded-lg bg-nova-bg-secondary p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="w-3 h-3 border-2 border-nova-accent border-t-transparent rounded-full animate-spin" />
-                  <span className="text-[12px] text-nova-text">{pentestProgress}</span>
+                  <span className="text-[12px] text-nova-text flex-1">{pentestProgress}</span>
+                  {pentestFindings.length > 0 && (
+                    <span className="text-[10px] text-nova-text-muted bg-nova-bg px-2 py-0.5 rounded-full">
+                      {pentestFindings.filter(f => f.severity === 'critical').length > 0 && (
+                        <span className="text-red-400 font-bold mr-1">{pentestFindings.filter(f => f.severity === 'critical').length}C</span>
+                      )}
+                      {pentestFindings.filter(f => f.severity === 'high').length > 0 && (
+                        <span className="text-orange-400 font-bold mr-1">{pentestFindings.filter(f => f.severity === 'high').length}H</span>
+                      )}
+                      {pentestFindings.length} findings
+                    </span>
+                  )}
+                  <button
+                    onClick={cancelPentest}
+                    className="text-[11px] px-2.5 py-1 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    Cancelar
+                  </button>
                 </div>
                 <div className="w-full h-2 bg-nova-bg rounded-full overflow-hidden">
                   <div

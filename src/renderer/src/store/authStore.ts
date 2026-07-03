@@ -47,6 +47,22 @@ export const useAuthStore = create<AuthState>()(
         try {
           await api.authInit()
           set({ initialized: true })
+          // Se o usuário já estava logado (restaurado do localStorage pelo persist),
+          // carrega as configurações do servidor MySQL
+          const currentUser = get().user
+          if (currentUser) {
+            try {
+              await useAIStore.getState().loadFromServer()
+            } catch (e) {
+              console.error('Failed to load AI configs on init:', e)
+            }
+            try {
+              await getSqlStore()?.getState().loadFromServer()
+            } catch (e) {
+              console.error('Failed to load DB configs on init:', e)
+            }
+            get().startPing()
+          }
         } catch (err) {
           console.error('Auth init error:', err)
         } finally {

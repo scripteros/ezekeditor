@@ -132,6 +132,7 @@ function providerDefaults(provider: AIProviderId): Partial<AIConfig> {
   if (provider === 'opencode') return { provider, baseUrl: 'https://api.opencode.ai/v1', model: '' }
   if (provider === 'groq') return { provider, baseUrl: 'https://api.groq.com/openai/v1', model: '' }
   if (provider === 'custom') return { provider, model: '' }
+  if (provider === 'hermes') return { provider, baseUrl: 'http://localhost:1337/v1', model: 'hermes-3' }
   if (provider === 'codebuff') return { provider, model: '' }
   return { provider, model: '' }
 }

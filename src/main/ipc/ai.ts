@@ -383,7 +383,7 @@ REGRA DE OURO SQL: NUNCA diga que VAI fazer algo que você pode fazer agora. Sim
 
     const fullPrompt = `${systemPrompt}${workspaceContext}\n\nProject context: ${JSON.stringify(history.slice(-10))}\n\nUser: ${message}\n\nAssistant:`
 
-    if (config.provider === 'routeway' || config.provider === 'openrouter' || config.provider === 'lmstudio' || config.provider === 'deepseek' || config.provider === 'custom' || config.provider === 'openai' || config.provider === 'opencode' || config.provider === 'groq') {
+    if (config.provider === 'routeway' || config.provider === 'openrouter' || config.provider === 'lmstudio' || config.provider === 'deepseek' || config.provider === 'custom' || config.provider === 'openai' || config.provider === 'opencode' || config.provider === 'groq' || config.provider === 'hermes') {
       try {
         let baseUrl = 'https://api.routeway.ai/v1'
         if (config.provider === 'openrouter') baseUrl = 'https://openrouter.ai/api/v1'

@@ -25,7 +25,7 @@ export interface AIMessage {
 export interface AIConfig {
   id?: string
   name?: string
-  provider: 'ollama' | 'openrouter' | 'openai' | 'lmstudio' | 'deepseek' | 'custom' | 'routeway' | 'codebuff' | 'opencode' | 'groq'
+  provider: 'ollama' | 'openrouter' | 'openai' | 'lmstudio' | 'deepseek' | 'custom' | 'routeway' | 'codebuff' | 'opencode' | 'groq' | 'hermes'
   model: string
   apiKey: string
   baseUrl: string

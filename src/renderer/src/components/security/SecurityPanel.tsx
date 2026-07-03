@@ -3094,6 +3094,30 @@ def usuario():
                                     <p className="text-[9px] text-green-400/60 mt-1">Dados obtidos via UNION SELECT. As consultas podem ter extraído informações reais do banco de dados.</p>
                                   </div>
                                 )}
+                                {finding.manualTest && (
+                                  <details className="mt-3" defaultChecked>
+                                    <summary className="flex items-center gap-1 text-[11px] font-semibold text-orange-400 cursor-pointer hover:text-orange-300 transition-colors">
+                                      <span>🧪</span>
+                                      <span>Como testar manualmente esta falha</span>
+                                    </summary>
+                                    <div className="mt-2 border border-orange-500/20 rounded-lg bg-orange-500/5 p-3">
+                                      {finding.manualTest.map((step, i) => (
+                                        <div key={i} className={`text-[10px] leading-relaxed ${step.startsWith('   ') ? 'text-nova-text-muted pl-5 font-mono' : 'text-nova-text font-medium'}`}>
+                                          {step}
+                                        </div>
+                                      ))}
+                                      <div className="mt-3 flex items-center gap-2">
+                                        <button
+                                          onClick={() => navigator.clipboard.writeText(finding.manualTest!.join('\n'))}
+                                          className="px-2.5 py-1 bg-orange-500/15 text-orange-400 rounded text-[9px] hover:bg-orange-500/25 transition-colors flex items-center gap-1"
+                                        >
+                                          <Copy size={10} />
+                                          Copiar todos os passos
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </details>
+                                )}
                               </div>
                             </div>
                           </div>

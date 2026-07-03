@@ -333,6 +333,13 @@ const api = {
     ipcRenderer.on(IPC_CHANNELS.USERS_ONLINE_EVENT, handler)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.USERS_ONLINE_EVENT, handler)
   },
+
+  // Docker
+  dockerCheckHermes: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.DOCKER_CHECK_HERMES) as Promise<{ dockerInstalled: boolean }>,
+
+  dockerRunHermes: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.DOCKER_RUN_HERMES) as Promise<{ success: boolean; message?: string; error?: string }>,
 }
 
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, StopCircle, Settings, Sparkles, Copy, Check, CheckCircle2, Trash2, Save, Plus, Paperclip, X, Image, File, TerminalSquare, Mic, Database, Play, Globe, Eye, EyeOff } from 'lucide-react'
+import { Send, Bot, User, StopCircle, Settings, Sparkles, Copy, Check, CheckCircle2, Trash2, Save, Plus, Paperclip, X, Image, File, TerminalSquare, Mic, Database, Play, Globe, Eye, EyeOff, Loader2, Monitor } from 'lucide-react'
 import { FileChangesBlock } from './FileChangesBlock'
 import { ThinkingBlock } from './ThinkingBlock'
 import { InlineFileEdits } from './InlineFileEdits'
@@ -359,6 +359,7 @@ export default function AIChatPanel() {
     if (config.provider === 'deepseek') return config.apiKey && config.model
     if (config.provider === 'groq') return config.apiKey && config.model
     if (config.provider === 'custom') return config.baseUrl && config.model
+    if (config.provider === 'hermes') return config.baseUrl && config.model
     if (config.provider === 'ollama') return config.baseUrl && config.model
     return config.apiKey && config.model
   }
@@ -391,6 +392,7 @@ export default function AIChatPanel() {
     if (provider === 'codebuff') return 'Codebuff (Agente Nativo)'
     if (provider === 'groq') return 'Groq'
     if (provider === 'custom') return 'API Personalizada'
+    if (provider === 'hermes') return 'Hermes Agent (Nous Research)'
     return provider
   }
 
@@ -401,6 +403,10 @@ export default function AIChatPanel() {
     const current = config.provider as string
     if (current && !allowed.includes(current)) {
       return [current, ...allowed]
+    }
+    // Hermes Agent sempre aparece no seletor (provedor local)
+    if (!allowed.includes('hermes')) {
+      return ['hermes', ...allowed]
     }
     return allowed
   })()
@@ -574,6 +580,7 @@ export default function AIChatPanel() {
                   if (provider === 'openrouter') nextConfig.baseUrl = 'https://openrouter.ai/api/v1'
                   if (provider === 'opencode') nextConfig.baseUrl = 'https://api.opencode.ai/v1'
                   if (provider === 'groq') nextConfig.baseUrl = 'https://api.groq.com/openai/v1'
+                  if (provider === 'hermes') nextConfig.baseUrl = 'http://localhost:1337/v1'
                   setConfig(nextConfig)
                   if (provider === 'routeway') fetchRouteWayModels()
                   if (provider === 'openrouter') fetchOpenRouterModels()
@@ -860,6 +867,36 @@ export default function AIChatPanel() {
                     onChange={e => setConfig({ apiKey: e.target.value })}
                     className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
                   />
+                </>
+              )}
+
+              {config.provider === 'hermes' && (
+                <>
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <span className="text-[10px] text-nova-text-muted">Hermes Agent rodando em:</span>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="URL Base (padrão: http://localhost:1337/v1)"
+                    value={config.baseUrl}
+                    onChange={e => setConfig({ baseUrl: e.target.value })}
+                    className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Modelo (ex: hermes-3, hermes-2-pro)"
+                    value={config.model}
+                    onChange={e => setConfig({ model: e.target.value })}
+                    className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+                  />
+                  <input
+                    type="password"
+                    placeholder="API Key (opcional para servidores remotos)"
+                    value={config.apiKey}
+                    onChange={e => setConfig({ apiKey: e.target.value })}
+                    className="w-full bg-nova-input-bg text-nova-text text-xs border border-nova-input-border rounded px-2 py-1 outline-none focus:border-nova-accent"
+                  />
+                  <DockerRunButton />
                 </>
               )}
 
@@ -1501,6 +1538,80 @@ function DashboardBlock({ htmlContent, blockId, savedDashboards, showCode, onSav
         <CheckCircle2 size={10} className="text-nova-accent" />
         Dashboard salvo automaticamente na Área de Trabalho
       </div>
+    </div>
+  )
+}
+
+// ─── Docker Hermes Agent Button ─────────────────────────
+function DockerRunButton() {
+  const [state, setState] = useState<'idle' | 'checking' | 'running' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    const api = (window as any).api
+    if (!api?.dockerCheckHermes) return
+    api.dockerCheckHermes().then((r: any) => {
+      if (!r.dockerInstalled) {
+        setState('error')
+        setMessage('Docker não encontrado. Instale o Docker Desktop.')
+      }
+    }).catch(() => {})
+  }, [])
+
+  const handleStart = async () => {
+    const api = (window as any).api
+    if (!api?.dockerRunHermes) return
+    setState('checking')
+    setMessage('Iniciando Hermes Agent...')
+    try {
+      const result = await api.dockerRunHermes()
+      if (result.success) {
+        setState('running')
+        setMessage(result.message || 'Hermes Agent rodando!')
+      } else {
+        setState('error')
+        setMessage(result.error || 'Falha ao iniciar.')
+      }
+    } catch (err: any) {
+      setState('error')
+      setMessage(err.message || 'Erro ao iniciar container')
+    }
+  }
+
+  if (state === 'running') {
+    return (
+      <div className="mt-3 border border-green-500/20 rounded-lg bg-green-500/5 p-3">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+          <span className="text-[11px] text-green-400 flex-1">{message}</span>
+          <button onClick={() => { setState('idle'); setMessage('') }} className="text-[10px] text-nova-text-muted hover:text-nova-text px-2 py-0.5">
+            Fechar
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3">
+      <button
+        onClick={handleStart}
+        disabled={state === 'checking'}
+        className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-nova-accent/30 text-nova-accent text-[11px] font-medium hover:bg-nova-accent/10 disabled:opacity-50 transition-colors"
+      >
+        {state === 'checking' ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <Monitor size={14} />
+        )}
+        {state === 'checking' ? 'Iniciando...' : state === 'error' ? message || 'Iniciar Hermes Agent no Docker' : '🚀 Iniciar Hermes Agent no Docker'}
+      </button>
+      {state === 'error' && message && (
+        <p className="mt-1 text-[10px] text-red-400/80 px-1">{message}</p>
+      )}
+      <p className="mt-1 text-[9px] text-nova-text-muted px-1">
+        Inicia o container NVIDIA NIM com Hermes 3 na porta 1337
+      </p>
     </div>
   )
 }

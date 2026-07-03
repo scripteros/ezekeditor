@@ -39,6 +39,10 @@ export const IPC_CHANNELS = {
   SQL_GET_CACHE: 'sql:getCache',
   SQL_CANCEL_QUERY: 'sql:cancelQuery',
   
+  // Docker
+  DOCKER_RUN_HERMES: 'docker:runHermes',
+  DOCKER_CHECK_HERMES: 'docker:checkHermes',
+  
   // Security
   SECURITY_START_PROXY: 'security:startProxy',
   SECURITY_STOP_PROXY: 'security:stopProxy',

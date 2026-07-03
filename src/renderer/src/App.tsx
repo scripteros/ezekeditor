@@ -23,6 +23,7 @@ export default function App() {
   const { isPanelOpen, panelWidth, setPanelWidth } = useAIStore()
   const user = useAuthStore(s => s.user)
   const updateOnlineUsers = useAuthStore(s => s.updateOnlineUsers)
+  const initAuth = useAuthStore(s => s.initAuth)
   const shouldShowSidebar = isSidebarOpen && activeView !== 'extensions' && activeView !== 'backlog'
 
   useEffect(() => {
@@ -32,6 +33,11 @@ export default function App() {
       root.style.setProperty(`--nova-${key}`, value)
     })
   }, [theme])
+
+  // Inicializa autenticação ao montar — carrega configs do MySQL se já logado
+  useEffect(() => {
+    initAuth()
+  }, [initAuth])
 
   // Listener de usuários online
   useEffect(() => {

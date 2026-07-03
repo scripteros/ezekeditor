@@ -4,7 +4,25 @@ import { getApi } from '../utils/platform'
 import { useExplorerStore } from './explorerStore'
 import { useEditorStore } from './editorStore'
 import { useSqlStore } from './sqlStore'
-import { useAuthStore } from './authStore'
+
+// Lazy getter for useAuthStore to break circular dependency
+// authStore imports useAIStore, so we cannot import useAuthStore here directly
+function getAuthUser(): { id: number; nome: string; usuario: string } | null {
+  try {
+    // Dynamically check if authStore is available
+    const stores = (window as any).__zustandStores
+    if (stores?.auth) {
+      return stores.auth.getState().user
+    }
+    // Fallback: try localStorage
+    const raw = localStorage.getItem('ezek-auth-storage')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed?.state?.user) return parsed.state.user
+    }
+  } catch {}
+  return null
+}
 
 interface RouteWayModel {
   id: string
@@ -93,7 +111,7 @@ function generateId(): string {
 }
 
 function getCurrentUserId(): string | null {
-  const user = useAuthStore.getState().user
+  const user = getAuthUser()
   return user ? String(user.id) : null
 }
 
@@ -102,31 +120,7 @@ function getChatsStorageKey(): string {
   return userId ? `ezek_ai_chats_${userId}` : 'ezek_ai_chats'
 }
 
-const STORAGE_KEY_CONFIGS = 'ezek_ai_configs'
-const STORAGE_KEY_ACTIVE_CONFIG = 'ezek_ai_active_config'
-
 type AIProviderId = AIConfig['provider']
-
-function loadSavedConfigs(): SavedConfig[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY_CONFIGS)
-    return stored ? JSON.parse(stored) : []
-  } catch { return [] }
-}
-
-function loadChatHistories(): Record<string, AIMessage[]> {
-  try {
-    const stored = localStorage.getItem(getChatsStorageKey())
-    return stored ? JSON.parse(stored) : {}
-  } catch { return {} }
-}
-
-function loadActiveConfig(): AIConfig | null {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY_ACTIVE_CONFIG)
-    return stored ? JSON.parse(stored) : null
-  } catch { return null }
-}
 
 function providerDefaults(provider: AIProviderId): Partial<AIConfig> {
   if (provider === 'ollama') return { provider, baseUrl: 'http://localhost:11434', model: '' }
@@ -234,26 +228,22 @@ function processCodebuffResponse(response: string): string {
   }
 }
 
-const initialHistories = loadChatHistories()
-const chatIds = Object.keys(initialHistories)
-let initialChatId = generateId()
-let initialMessages: AIMessage[] = []
-
-if (chatIds.length > 0) {
-  // Pegar o último chat criado/editado (baseado na ordem das chaves ou timestamps)
-  initialChatId = chatIds[chatIds.length - 1]
-  initialMessages = initialHistories[initialChatId] || []
+// Debounced sync to MySQL after mutations
+let syncTimer: any = null
+function scheduleSyncToServer() {
+  if (syncTimer) clearTimeout(syncTimer)
+  syncTimer = setTimeout(() => {
+    try {
+      useAIStore.getState().syncToServer()
+    } catch {}
+  }, 2000)
 }
 
+// Estado inicial limpo — dados são carregados do MySQL via loadFromServer() no login
 export const useAIStore = create<AIState>((set, get) => ({
-  messages: initialMessages,
-  config: loadActiveConfig() || DEFAULT_CONFIG,
-  activeConfigId: (() => {
-    try {
-      const stored = localStorage.getItem('ezek_active_config_id')
-      return stored || null
-    } catch { return null }
-  })(),
+  messages: [],
+  config: DEFAULT_CONFIG,
+  activeConfigId: null,
   isProcessing: false,
   isPanelOpen: false,
   activePlanSteps: [],
@@ -265,88 +255,56 @@ export const useAIStore = create<AIState>((set, get) => ({
   isLoadingOllamaModels: false,
   openRouterModels: [],
   isLoadingOpenRouterModels: false,
-  savedConfigs: loadSavedConfigs() || [],
-  chatHistories: initialHistories,
-  currentChatId: initialChatId,
+  savedConfigs: [],
+  chatHistories: {},
+  currentChatId: generateId(),
   panelWidth: 320,
-  acquiredAPIs: (() => {
-    try {
-      const stored = localStorage.getItem('ezek_acquired_apis')
-      return stored ? JSON.parse(stored) : []
-    } catch { return [] }
-  })(),
-  enabledAIProviders: (() => {
-    try {
-      const stored = localStorage.getItem('ezek_enabled_ai_providers')
-      return stored ? JSON.parse(stored) : []
-    } catch { return [] }
-  })(),
+  acquiredAPIs: [],
+  enabledAIProviders: [],
   sessionFileWriteCount: 0,
 
   acquireAPI: (id) => {
     set(state => {
       const updated = [...new Set([...state.acquiredAPIs, id])]
-      try {
-        localStorage.setItem('ezek_acquired_apis', JSON.stringify(updated))
-      } catch {}
       return { acquiredAPIs: updated }
     })
+    scheduleSyncToServer()
   },
 
   releaseAPI: (id) => {
     set(state => {
       const updatedAcquired = state.acquiredAPIs.filter(apiId => apiId !== id)
       const updatedEnabled = state.enabledAIProviders.filter(providerId => providerId !== id)
-      try {
-        localStorage.setItem('ezek_acquired_apis', JSON.stringify(updatedAcquired))
-        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updatedEnabled))
-      } catch {}
-
       const next: Partial<AIState> = { acquiredAPIs: updatedAcquired, enabledAIProviders: updatedEnabled }
-
       if (state.config.provider === id) {
         const fallbackProvider = (updatedEnabled[0] as AIProviderId | undefined) || 'custom'
         next.config = { ...state.config, ...providerDefaults(fallbackProvider) }
-        try {
-          localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(next.config))
-        } catch {}
       }
-
       return next as any
     })
+    scheduleSyncToServer()
   },
 
   enableAPIProvider: (id) => {
     set(state => {
       const updatedAcquired = [...new Set([...state.acquiredAPIs, id])]
       const updatedEnabled = [...new Set([...state.enabledAIProviders, id])]
-      try {
-        localStorage.setItem('ezek_acquired_apis', JSON.stringify(updatedAcquired))
-        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updatedEnabled))
-      } catch {}
       return { acquiredAPIs: updatedAcquired, enabledAIProviders: updatedEnabled }
     })
+    scheduleSyncToServer()
   },
 
   disableAPIProvider: (id) => {
     set(state => {
       const updatedEnabled = state.enabledAIProviders.filter(providerId => providerId !== id)
-      try {
-        localStorage.setItem('ezek_enabled_ai_providers', JSON.stringify(updatedEnabled))
-      } catch {}
-
       const next: Partial<AIState> = { enabledAIProviders: updatedEnabled }
-
       if (state.config.provider === id) {
         const fallbackProvider = (updatedEnabled[0] as AIProviderId | undefined) || 'custom'
         next.config = { ...state.config, ...providerDefaults(fallbackProvider) }
-        try {
-          localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(next.config))
-        } catch {}
       }
-
       return next as any
     })
+    scheduleSyncToServer()
   },
 
   addMessage: (msg) => {
@@ -362,16 +320,10 @@ export const useAIStore = create<AIState>((set, get) => ({
 
   setConfig: (partial) => {
     set(state => ({ config: { ...state.config, ...partial } }))
-    try {
-      localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify({ ...get().config, ...partial }))
-    } catch {}
   },
 
   setActiveConfigId: (id) => {
     set({ activeConfigId: id })
-    try {
-      localStorage.setItem('ezek_active_config_id', id || '')
-    } catch {}
   },
 
   sendMessage: async (content: string, attachments?: AIAttachment[], isHiddenSystemMessage = false, depth = 0) => {
@@ -439,7 +391,7 @@ export const useAIStore = create<AIState>((set, get) => ({
       }
 
       // Adicionar identidade do usuário para contexto da IA
-      const authUser = useAuthStore.getState().user
+      const authUser = getAuthUser()
       if (authUser) {
         messageContent = `[USUÁRIO ATUAL]: ${authUser.nome} (usuário: ${authUser.usuario})\n\n${messageContent}`
       }
@@ -467,7 +419,11 @@ export const useAIStore = create<AIState>((set, get) => ({
           }
           
           if (config.allowAutonomousSql) {
-            messageContent += `\n\n[AGENTE SQL ATIVADO]: Você tem permissão para consultar o banco de dados de forma autônoma para resolver o problema do usuário.
+            // Só inclui regras Oracle Tasy se o workspace SQL estiver aberto
+            const showSqlWs = useSqlStore.getState().showSqlWorkspace
+            
+            if (showSqlWs) {
+              messageContent += `\n\n[AGENTE SQL ATIVADO]: O usuário está com o workspace SQL aberto.
 Se você precisar buscar dados ou investigar a estrutura, use a action: {"type": "execute_sql", "query": "SEU SQL AQUI"}.
 Eu vou executar o SQL silenciosamente e te devolver o resultado. Você pode fazer isso quantas vezes quiser até obter todos os dados necessários.
 IMPORTANTE - REGRA DE ENTREGA: Você DEVE SEMPRE entregar a conclusão final da solicitação. Siga este fluxo:
@@ -485,7 +441,7 @@ REGRAS OBRIGATÓRIAS PARA ORACLE TASY (DBLINK @tasyprod):
 DECISÃO — QUANDO USAR DBLINK:
 - Tabelas do sistema Tasy (pacientes, atendimentos, guias, contas, faturamento, etc): use \`tasy.NOME@tasyprod\`
 - Tabelas locais (próprias do banco conectado, relatórios customizados): NÃO use @tasyprod
-- Se não tem certeza: tente sem @tasyprod → se der ORA-00942, tente com \`tasy.NOME@tasyprod\`
+- Se não tem certeza: tente sem @tasyprod \u2192 se der ORA-00942, tente com \`tasy.NOME@tasyprod\`
 
 SINTAXE CORRETA (OBRIGATÓRIO):
 - \`tasy.nome_tabela@tasyprod\` — SEMPRE com \`tasy.\` ANTES e \`@tasyprod\` DEPOIS
@@ -499,8 +455,8 @@ AUTO-CORREÇÃO OBRIGATÓRIA (SEMPRE SIGA):
 Quando seu SQL der erro, você DEVE automaticamente:
 1. Analisar o erro ORA-XXXXX
 2. ORA-00942 (table/view not found): 
-   - Sem @tasyprod → adicione \`tasy.NOME@tasyprod\`
-   - Com @tasyprod e ainda erro → busque nome correto da tabela
+   - Sem @tasyprod \u2192 adicione \`tasy.NOME@tasyprod\`
+   - Com @tasyprod e ainda erro \u2192 busque nome correto da tabela
 3. ORA-00904 (invalid identifier / coluna não existe):
    - Investigue colunas reais: \`SELECT column_name FROM all_tab_columns@tasyprod WHERE table_name = 'TABELA'\`
    - Ajuste a query com o nome correto da coluna
@@ -508,6 +464,17 @@ Quando seu SQL der erro, você DEVE automaticamente:
 5. Corrija e tente novamente. REPITA até funcionar.
 6. Depois de obter os dados, SEMPRE entregue a resposta final ao usuário
 7. NUNCA pare no meio — finalize o raciocínio e entregue a conclusão`;
+            } else {
+              messageContent += `\n\n[ASSISTENTE DE CÓDIGO]: Você é um assistente de programação.
+O usuário está no workspace de código do editor.
+Você pode:
+1. Criar, editar e ler arquivos no projeto
+2. Executar comandos no terminal
+3. Responder perguntas técnicas sobre código, arquitetura, etc
+4. APENAS se o usuário pedir EXPLICITAMENTE, você pode usar execute_sql
+5. NÃO use SQL a menos que o usuário peça
+6. Regras Oracle Tasy dblink NÃO se aplicam aqui`;
+            }
           }
         }
       }
@@ -596,13 +563,15 @@ Quando seu SQL der erro, você DEVE automaticamente:
           return blockedDirectories.some(dir => filePath.includes(dir));
         };
 
-        const MAX_FILE_WRITES_PER_SESSION = 25;
+        const MAX_FILE_WRITES_PER_SESSION = 10;
+        const MAX_FILE_WRITES_PER_MESSAGE = 3;  // limite por resposta da IA
 
         // Só executa ações nas primeiras chamadas (depth limitado) para evitar loop infinito
         if (depth < 3 && parsedActions && Array.isArray(parsedActions)) {
           let executedAny = false;
           let fileChanges: { path: string, add: number, del: number, originalContent?: string }[] = [];
           let actionFeedback = '';
+          let fileWritesInThisMessage = 0;  // contador de arquivos criados NESTA resposta
           
           for (const action of parsedActions) {
               if (action.filePath) action.filePath = resolvePath(action.filePath, rootPath);
@@ -633,7 +602,20 @@ Quando seu SQL der erro, você DEVE automaticamente:
                 // SAFETY: limite de arquivos por sessão
                 const currentCount = get().sessionFileWriteCount;
                 if (currentCount >= MAX_FILE_WRITES_PER_SESSION) {
-                  actionFeedback += `\n[BLOCKED] Limite de ${MAX_FILE_WRITES_PER_SESSION} arquivos criados por sessão atingido. Não é possível criar mais arquivos.\n`;
+                  actionFeedback += `\n[BLOCKED] Limite de ${MAX_FILE_WRITES_PER_SESSION} arquivos por sessão atingido.\n`;
+                  continue;
+                }
+
+                // SAFETY: limite de arquivos por resposta — evita criação massiva de uma vez
+                if (fileWritesInThisMessage >= MAX_FILE_WRITES_PER_MESSAGE) {
+                  actionFeedback += `\n[BLOCKED] Limite de ${MAX_FILE_WRITES_PER_MESSAGE} arquivos por resposta atingido. Se precisar criar mais, envie uma nova mensagem.\n`;
+                  continue;
+                }
+
+                // REGRA RÍGIDA: arquivos .html (dashboard/relatório) = no máximo 1 por resposta
+                const isDashboardFile = resolvedPath.endsWith('.html') || resolvedPath.includes('dashboard') || resolvedPath.includes('report');
+                if (isDashboardFile && fileWritesInThisMessage >= 1) {
+                  actionFeedback += `\n[BLOCKED] Dashboard e relatório só podem ser criados em 1 arquivo único. Use um único arquivo HTML auto-contido.\n`;
                   continue;
                 }
 
@@ -673,8 +655,9 @@ Quando seu SQL der erro, você DEVE automaticamente:
                 try {
                   await api.aiWriteFile(action.filePath, action.content);
                   useEditorStore.getState().openFile(action.filePath);
-                  // Incrementa o contador de arquivos criados na sessão
+                  // Incrementa os contadores
                   set(state => ({ sessionFileWriteCount: state.sessionFileWriteCount + 1 }));
+                  fileWritesInThisMessage++;  // contador por resposta
                   actionFeedback += `\n[Success: wrote file ${action.filePath}]\n`;
                 } catch (err: any) {
                   actionFeedback += `\n[Error writing ${action.filePath}]: ${err.message || 'Permission denied'}\n`;
@@ -900,10 +883,7 @@ ${feedbackType === 'error'
     }
     const updated = [...savedConfigs, newConfig]
     set({ savedConfigs: updated, activeConfigId: newConfig.id })
-    try {
-      localStorage.setItem(STORAGE_KEY_CONFIGS, JSON.stringify(updated))
-      localStorage.setItem('ezek_active_config_id', newConfig.id)
-    } catch {}
+    scheduleSyncToServer()
   },
 
   updateConfig: (configId, updates) => {
@@ -916,7 +896,6 @@ ${feedbackType === 'error'
       return c
     })
     set({ savedConfigs: updated })
-    try { localStorage.setItem(STORAGE_KEY_CONFIGS, JSON.stringify(updated)) } catch {}
   },
 
   loadConfig: (configId) => {
@@ -924,14 +903,11 @@ ${feedbackType === 'error'
     const found = savedConfigs.find(c => c.id === configId)
     if (found) {
       set({ config: { ...found.config }, activeConfigId: configId })
-      try {
-        localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(found.config))
-        localStorage.setItem('ezek_active_config_id', configId)
-      } catch {}
       if (found.config.provider === 'routeway') {
         get().fetchRouteWayModels()
       }
     }
+    scheduleSyncToServer()
   },
 
   deleteConfig: (configId) => {
@@ -940,9 +916,8 @@ ${feedbackType === 'error'
     set({ savedConfigs: updated })
     if (activeConfigId === configId) {
       set({ activeConfigId: null })
-      try { localStorage.setItem('ezek_active_config_id', '') } catch {}
     }
-    try { localStorage.setItem(STORAGE_KEY_CONFIGS, JSON.stringify(updated)) } catch {}
+    scheduleSyncToServer()
   },
 
   activateConfig: (configId) => {
@@ -950,18 +925,15 @@ ${feedbackType === 'error'
     const found = savedConfigs.find(c => c.id === configId)
     if (found) {
       set({ config: { ...found.config }, activeConfigId: configId })
-      try {
-        localStorage.setItem(STORAGE_KEY_ACTIVE_CONFIG, JSON.stringify(found.config))
-        localStorage.setItem('ezek_active_config_id', configId)
-      } catch {}
     }
+    scheduleSyncToServer()
   },
 
   saveChatHistory: () => {
     const { messages, currentChatId, chatHistories } = get()
     const updated = { ...chatHistories, [currentChatId]: messages }
     set({ chatHistories: updated })
-    try { localStorage.setItem(getChatsStorageKey(), JSON.stringify(updated)) } catch {}
+    scheduleSyncToServer()
   },
 
   loadChatHistory: (chatId) => {
@@ -977,23 +949,21 @@ ${feedbackType === 'error'
     const updated = { ...chatHistories }
     delete updated[chatId]
     set({ chatHistories: updated })
-    try { localStorage.setItem(getChatsStorageKey(), JSON.stringify(updated)) } catch {}
+    scheduleSyncToServer()
   },
 
   createNewChat: () => {
     const newId = generateId()
-    // Limpa TODO o estado da conversa anterior: mensagens, planos, mudanças pendentes
     set({
       messages: [],
       currentChatId: newId,
       activePlanSteps: [],
       pendingChanges: []
     })
-    // Persiste o chat vazio no localStorage
     const { chatHistories } = get()
     const updated = { ...chatHistories, [newId]: [] }
     set({ chatHistories: updated })
-    try { localStorage.setItem(getChatsStorageKey(), JSON.stringify(updated)) } catch {}
+    scheduleSyncToServer()
   },
 
   clearChat: () => {
@@ -1020,5 +990,39 @@ ${feedbackType === 'error'
     
     // Optionally remove the fileChanges from the message or mark them as reverted
     // But keeping it is fine, just maybe add a notification.
+  },
+
+  // ─── MySQL Sync ─────────────────────────────
+  syncToServer: async () => {
+    const api = getApi()
+    if (!api || !(api as any).userSaveAiConfigs) return
+    const user = getAuthUser()
+    if (!user) return
+    const { acquiredAPIs, enabledAIProviders, savedConfigs, config, activeConfigId, chatHistories, currentChatId } = get()
+    await (api as any).userSaveAiConfigs(user.id, {
+      acquiredAPIs,
+      enabledAIProviders,
+      savedConfigs,
+      activeConfig: config,
+      activeConfigId,
+      chatHistories
+    })
+  },
+
+  loadFromServer: async () => {
+    const api = getApi()
+    if (!api || !(api as any).userLoadAiConfigs) return
+    const user = getAuthUser()
+    if (!user) return
+    const result = await (api as any).userLoadAiConfigs(user.id)
+    if (result.success && result.configs) {
+      const c = result.configs
+      if (c.acquired_apis) set({ acquiredAPIs: c.acquired_apis })
+      if (c.enabled_providers) set({ enabledAIProviders: c.enabled_providers })
+      if (c.saved_configs) set({ savedConfigs: c.saved_configs })
+      if (c.active_config) set({ config: c.active_config })
+      if (c.active_config_id) set({ activeConfigId: c.active_config_id })
+      if (c.chat_histories) set({ chatHistories: c.chat_histories })
+    }
   }
 }))

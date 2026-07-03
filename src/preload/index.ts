@@ -279,6 +279,60 @@ const api = {
 
   authRegister: (data: { nome: string; usuario: string; senha: string }) =>
     ipcRenderer.invoke(IPC_CHANNELS.AUTH_REGISTER, data) as Promise<{ success: boolean; user?: { nome: string; usuario: string }; error?: string }>,
+
+  userSaveConfig: (userId: number, key: string, value: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.USER_SAVE_CONFIG, userId, key, value) as Promise<{ success: boolean; error?: string }>,
+
+  userLoadConfigs: (userId: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.USER_LOAD_CONFIGS, userId) as Promise<{ success: boolean; configs?: Record<string, any>; error?: string }>,
+
+  userSaveAiConfigs: (userId: number, data: {
+    acquiredAPIs: string[]
+    enabledAIProviders: string[]
+    savedConfigs: any[]
+    activeConfig: any
+    activeConfigId: string | null
+    chatHistories: Record<string, any[]>
+  }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.USER_SAVE_AI_CONFIGS, userId, data) as Promise<{ success: boolean; error?: string }>,
+
+  userLoadAiConfigs: (userId: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.USER_LOAD_AI_CONFIGS, userId) as Promise<{ success: boolean; configs?: Record<string, any>; error?: string }>,
+
+  // Auto Update
+  checkForUpdate: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTO_UPDATE_CHECK) as Promise<{ updateAvailable: boolean; version?: string; error?: string }>,
+
+  installUpdate: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.AUTO_UPDATE_INSTALL) as Promise<{ success: boolean; error?: string }>,
+
+  onAutoUpdateAvailable: (callback: (info: any) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
+    ipcRenderer.on(IPC_CHANNELS.AUTO_UPDATE_AVAILABLE, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.AUTO_UPDATE_AVAILABLE, handler)
+  },
+
+  onAutoUpdateProgress: (callback: (progress: any) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
+    ipcRenderer.on(IPC_CHANNELS.AUTO_UPDATE_PROGRESS, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.AUTO_UPDATE_PROGRESS, handler)
+  },
+
+  onAutoUpdateDownloaded: (callback: (info: any) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: any) => callback(data)
+    ipcRenderer.on(IPC_CHANNELS.AUTO_UPDATE_DOWNLOADED, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.AUTO_UPDATE_DOWNLOADED, handler)
+  },
+
+  // Online Users
+  getOnlineCount: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.USERS_ONLINE_COUNT) as Promise<{ count: number; error?: string }>,
+
+  onUsersOnlineChanged: (callback: (data: { count: number }) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: { count: number }) => callback(data)
+    ipcRenderer.on(IPC_CHANNELS.USERS_ONLINE_EVENT, handler)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.USERS_ONLINE_EVENT, handler)
+  },
 }
 
 

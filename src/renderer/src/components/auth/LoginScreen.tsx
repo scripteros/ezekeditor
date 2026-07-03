@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../../store/authStore'
-import { User, Lock, UserPlus, LogIn, Eye, EyeOff, Loader2, Code2 } from 'lucide-react'
+import { User, Lock, UserPlus, LogIn, Eye, EyeOff, Loader2, Code2, Users } from 'lucide-react'
 import logo from '../../assets/logo.png'
 
 export default function LoginScreen() {
-  const { login, register, initAuth, isAuthLoading } = useAuthStore()
+  const { login, register, initAuth, isAuthLoading, onlineUsers, startPing, stopPing } = useAuthStore()
 
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [nome, setNome] = useState('')
@@ -17,6 +17,17 @@ export default function LoginScreen() {
 
   useEffect(() => {
     initAuth()
+  }, [])
+
+  // Inicia ping da sessão quando usuário loga
+  useEffect(() => {
+    const user = useAuthStore.getState().user
+    if (user) {
+      startPing()
+    }
+    return () => {
+      stopPing()
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -219,6 +230,14 @@ export default function LoginScreen() {
               >
                 {mode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça login'}
               </button>
+            </div>
+
+            {/* Online users counter */}
+            <div className="mt-4 pt-3 border-t border-nova-border flex items-center justify-center gap-2">
+              <Users size={13} className="text-nova-accent" />
+              <span className="text-[11px] text-nova-text-muted">
+                <span className="text-nova-accent font-semibold">{onlineUsers}</span> usuário{onlineUsers !== 1 ? 's' : ''} online
+              </span>
             </div>
           </div>
         </div>

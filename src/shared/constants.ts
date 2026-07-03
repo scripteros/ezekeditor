@@ -106,10 +106,27 @@ export const IPC_CHANNELS = {
   AUTH_LOGIN: 'auth:login',
   AUTH_REGISTER: 'auth:register',
   
+  // User Config Sync (MySQL)
+  USER_SAVE_CONFIG: 'user:saveConfig',
+  USER_LOAD_CONFIGS: 'user:loadConfigs',
+  USER_SAVE_AI_CONFIGS: 'user:saveAiConfigs',
+  USER_LOAD_AI_CONFIGS: 'user:loadAiConfigs',
+  
   // Events (main -> renderer)
   FILE_CHANGED: 'event:fileChanged',
   TERMINAL_DATA: 'event:terminalData',
   TERMINAL_EXIT: 'event:terminalExit',
+  AUTO_UPDATE_AVAILABLE: 'event:autoUpdateAvailable',
+  AUTO_UPDATE_PROGRESS: 'event:autoUpdateProgress',
+  AUTO_UPDATE_DOWNLOADED: 'event:autoUpdateDownloaded',
+  
+  // Auto Update
+  AUTO_UPDATE_CHECK: 'app:checkForUpdate',
+  AUTO_UPDATE_INSTALL: 'app:installUpdate',
+  
+  // Online Users
+  USERS_ONLINE_COUNT: 'users:onlineCount',
+  USERS_ONLINE_EVENT: 'event:usersOnlineChanged',
 } as const
 
 export const DEFAULT_EDITOR_CONTENT = ''

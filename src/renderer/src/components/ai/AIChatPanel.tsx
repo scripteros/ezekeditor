@@ -395,9 +395,13 @@ export default function AIChatPanel() {
   }
 
   const visibleProviders = (() => {
+    // Mostra provedores que estão adquiridos E habilitados
     const allowed = enabledAIProviders.filter(p => acquiredAPIs.includes(p))
-    const current = config.provider as unknown as string
-    if (current && !allowed.includes(current)) return [current, ...allowed]
+    // Sempre inclui o provedor atualmente selecionado para que o <select> exiba corretamente
+    const current = config.provider as string
+    if (current && !allowed.includes(current)) {
+      return [current, ...allowed]
+    }
     return allowed
   })()
 
@@ -561,10 +565,11 @@ export default function AIChatPanel() {
                   if (!e.target.value) return
                   const provider = e.target.value
                   const nextConfig: any = { provider, model: '' }
-                  if (provider === 'ollama') nextConfig.baseUrl = config.baseUrl?.startsWith('http') ? config.baseUrl : 'http://localhost:11434'
-                  if (provider === 'openai') nextConfig.baseUrl = config.baseUrl?.startsWith('http') ? config.baseUrl : 'https://api.openai.com/v1'
-                  if (provider === 'lmstudio') nextConfig.baseUrl = config.baseUrl?.startsWith('http') ? config.baseUrl : 'http://localhost:1234/v1'
-                  if (provider === 'deepseek') nextConfig.baseUrl = config.baseUrl?.startsWith('http') ? config.baseUrl : 'https://api.deepseek.com/v1'
+                  // Sempre usa a URL padrão do provedor (não preserva URL antiga)
+                  if (provider === 'ollama') nextConfig.baseUrl = 'http://localhost:11434'
+                  if (provider === 'openai') nextConfig.baseUrl = 'https://api.openai.com/v1'
+                  if (provider === 'lmstudio') nextConfig.baseUrl = 'http://localhost:1234/v1'
+                  if (provider === 'deepseek') nextConfig.baseUrl = 'https://api.deepseek.com/v1'
                   if (provider === 'routeway') nextConfig.baseUrl = 'https://api.routeway.ai/v1'
                   if (provider === 'openrouter') nextConfig.baseUrl = 'https://openrouter.ai/api/v1'
                   if (provider === 'opencode') nextConfig.baseUrl = 'https://api.opencode.ai/v1'
@@ -580,7 +585,8 @@ export default function AIChatPanel() {
                   <option value="">Nenhum provedor em uso. Ative um no Marketplace.</option>
                 )}
                 {visibleProviders.map((providerId) => {
-                  const enabled = enabledAIProviders.includes(providerId) && acquiredAPIs.includes(providerId)
+                  const isCurrent = providerId === config.provider
+                  const enabled = isCurrent || (enabledAIProviders.includes(providerId) && acquiredAPIs.includes(providerId))
                   return (
                     <option key={providerId} value={providerId} disabled={!enabled}>
                       {providerLabel(providerId)}{enabled ? '' : ' (não ativo)'}

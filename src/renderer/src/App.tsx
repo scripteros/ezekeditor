@@ -9,6 +9,7 @@ import CommandPalette from './components/commandPalette/CommandPalette'
 import RightPanel from './components/layout/RightPanel'
 import HorizontalResizer from './components/layout/HorizontalResizer'
 import LoginScreen from './components/auth/LoginScreen'
+import UpdateNotification from './components/UpdateNotification'
 import { useThemeStore } from './store/themeStore'
 import { useCommandPaletteStore } from './store/commandPaletteStore'
 import { useSidebarStore } from './store/sidebarStore'
@@ -18,9 +19,10 @@ import { useAuthStore } from './store/authStore'
 export default function App() {
   const { theme } = useThemeStore()
   const { togglePalette } = useCommandPaletteStore()
-  const { isOpen: isSidebarOpen, activeView, setWidth: setSidebarWidth } = useSidebarStore()
+  const { isOpen: isSidebarOpen, activeView, setWidth: setSidebarWidth, showBacklogWorkspace } = useSidebarStore()
   const { isPanelOpen, panelWidth, setPanelWidth } = useAIStore()
   const user = useAuthStore(s => s.user)
+  const updateOnlineUsers = useAuthStore(s => s.updateOnlineUsers)
   const shouldShowSidebar = isSidebarOpen && activeView !== 'extensions' && activeView !== 'backlog'
 
   useEffect(() => {
@@ -30,6 +32,16 @@ export default function App() {
       root.style.setProperty(`--nova-${key}`, value)
     })
   }, [theme])
+
+  // Listener de usuários online
+  useEffect(() => {
+    const api = (window as any).api
+    if (!api) return
+    const cleanup = api.onUsersOnlineChanged((data: { count: number }) => {
+      updateOnlineUsers(data.count)
+    })
+    return () => cleanup?.()
+  }, [updateOnlineUsers])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -72,6 +84,7 @@ export default function App() {
       </div>
       <StatusBar />
       <CommandPalette />
+      <UpdateNotification />
     </div>
   )
 }

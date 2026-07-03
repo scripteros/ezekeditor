@@ -9,6 +9,8 @@ import { registerSqlHandlers } from './sql'
 import { registerSecurityHandlers } from './security'
 import { registerLdapHandlers } from './ldap'
 import { registerAuthHandlers } from './auth'
+import { registerAutoUpdateHandlers } from '../services/autoUpdater'
+import { registerOnlineUsersHandlers, unregisterOnlineUsers } from '../services/onlineUsers'
 import { watchDirectory, unwatchDirectory } from '../services/watcherService'
 
 export function registerAllIpcHandlers(): void {
@@ -21,6 +23,8 @@ export function registerAllIpcHandlers(): void {
   registerSecurityHandlers()
   registerLdapHandlers()
   registerAuthHandlers()
+  registerAutoUpdateHandlers()
+  registerOnlineUsersHandlers()
 
   ipcMain.handle(IPC_CHANNELS.WATCH_DIRECTORY, (_event, dirPath: string) => {
     watchDirectory(dirPath)
@@ -30,3 +34,5 @@ export function registerAllIpcHandlers(): void {
     unwatchDirectory(dirPath)
   })
 }
+
+export { unregisterOnlineUsers }

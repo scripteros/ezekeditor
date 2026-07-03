@@ -1,7 +1,7 @@
 import { app, BrowserWindow, nativeImage, nativeTheme, protocol, net } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { registerAllIpcHandlers } from './ipc'
+import { registerAllIpcHandlers, unregisterOnlineUsers } from './ipc'
 import { unwatchAll } from './services/watcherService'
 import { killAllTerminals } from './ipc/terminal'
 
@@ -190,6 +190,13 @@ app.whenReady().then(() => {
   const splash = createSplashWindow(iconPath, logoPath)
   createWindow(splash)
 
+  // Verifica updates automaticamente ao iniciar (em produção)
+  if (!isDev) {
+    import('electron-updater').then(({ autoUpdater }) => {
+      autoUpdater.checkForUpdatesAndNotify().catch(() => {})
+    })
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
@@ -206,4 +213,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   unwatchAll()
   killAllTerminals()
+  unregisterOnlineUsers()
 })

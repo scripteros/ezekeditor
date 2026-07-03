@@ -18,13 +18,11 @@ import BacklogWorkspace from '../backlog/BacklogPanel'
 export default function EditorPanel() {
   const { openFiles, activeFileId, setActiveFile, closeFile, isLoadingFile, isDiffMode } = useEditorStore()
   const { setRootPath } = useExplorerStore()
-  const { executeQuery, activeConnectionId, isExecuting } = useSqlStore()
-  const { activeView } = useSidebarStore()
+  const { executeQuery, activeConnectionId, isExecuting, showSqlWorkspace, setShowSqlWorkspace } = useSqlStore()
+  const { activeView, showBacklogWorkspace, setShowBacklogWorkspace } = useSidebarStore()
   const tabsRef = useRef<HTMLDivElement>(null)
-  const [showSqlWorkspace, setShowSqlWorkspace] = useState(false)
   const [showSecurityWorkspace, setShowSecurityWorkspace] = useState(false)
   const tabListRef = useRef<HTMLDivElement>(null)
-  
   const activeFile = openFiles.find(f => f.id === activeFileId)
   
   const handleRunQuery = () => {

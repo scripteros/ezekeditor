@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ezekiel Editor - O Editor de Próxima Geração</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,100..900&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        .gradient-bg {
+            background: radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.15) 0%, rgba(0, 0, 0, 0) 70%),
+                        radial-gradient(circle at 80% 70%, rgba(236, 72, 153, 0.1) 0%, rgba(0, 0, 0, 0) 70%);
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .feature-hover {
+            transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+        }
+        .feature-hover:hover {
+            transform: translateY(-4px);
+            border-color: rgba(139, 92, 246, 0.4);
+            box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.3);
+        }
+        .animate-glow {
+            animation: glowPulse 3s infinite;
+        }
+        @keyframes glowPulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-black text-gray-200 overflow-x-hidden">
+    <div class="gradient-bg absolute inset-0 -z-10"></div>
+    
+    <!-- Navbar -->
+    <nav class="glass-card border-b border-white/10 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center shadow-lg">
+                    <i class="fas fa-code text-white text-sm"></i>
+                </div>
+                <span class="font-bold text-xl bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">Ezekiel</span>
+                <span class="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">Alpha</span>
+            </div>
+            <div class="hidden md:flex gap-8 text-sm text-gray-400">
+                <a href="#features" class="hover:text-white transition">Features</a>
+                <a href="#tech" class="hover:text-white transition">Tech Stack</a>
+                <a href="#about" class="hover:text-white transition">Sobre</a>
+            </div>
+            <button class="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition text-sm">
+                <i class="fab fa-github mr-2"></i>GitHub
+            </button>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="max-w-7xl mx-auto px-6 pt-20 pb-32 text-center">
+        <div class="inline-block mb-6 px-4 py-1.5 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-300 text-xs font-medium">
+            <i class="fas fa-robot mr-2 text-xs"></i>Potenciado por IA Local
+        </div>
+        <h1 class="text-6xl md:text-7xl font-bold bg-gradient-to-r from-white via-purple-200 to-pink-200 bg-clip-text text-transparent leading-tight">
+            O Editor que<br>Pensa com Você
+        </h1>
+        <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6">
+            Ezekiel Editor é um ambiente de desenvolvimento integrado com inteligência artificial local, código aberto e design focado em produtividade extrema.
+        </p>
+        <div class="flex gap-4 justify-center mt-10">
+            <button class="px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transition shadow-lg shadow-purple-500/25 font-medium">
+                <i class="fas fa-download mr-2"></i>Baixar Agora
+            </button>
+            <button class="px-8 py-3 rounded-xl glass-card border border-white/20 hover:bg-white/5 transition font-medium">
+                <i class="fab fa-github mr-2"></i>Ver no GitHub
+            </button>
+        </div>
+        <div class="mt-16 flex justify-center gap-8 text-sm text-gray-500">
+            <span><i class="fas fa-check-circle text-green-500 mr-1"></i> Open Source</span>
+            <span><i class="fas fa-shield-alt text-blue-500 mr-1"></i> Segurança Total</span>
+            <span><i class="fas fa-charging-station text-yellow-500 mr-1"></i> IA Offline</span>
+        </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section id="features" class="max-w-7xl mx-auto px-6 py-20">
+        <div class="text-center mb-16">
+            <h2 class="text-4xl font-bold mb-4">Funcionalidades <span class="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Excepcionais</span></h2>
+            <p class="text-gray-400 max-w-2xl mx-auto">Tudo o que você precisa para programar com eficiência e estilo.</p>
+        </div>
+        <div class="grid md:grid-cols-3 gap-8">
+            <div class="glass-card rounded-2xl p-6 feature-hover cursor-default">
+                <div class="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center mb-4 border border-purple-500/30">
+                    <i class="fas fa-brain text-purple-400 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">IA Local Integrada</h3>
+                <p class="text-gray-400 text-sm">Assistente de código com modelos locais via Ollama. Sem necessidade de nuvem, total privacidade.</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 feature-hover cursor-default">
+                <div class="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-4 border border-blue-500/30">
+                    <i class="fas fa-microphone-alt text-blue-400 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">Comandos por Voz</h3>
+                <p class="text-gray-400 text-sm">Controle o editor com sua voz. Reconhecimento de fomr local para maior agilidade.</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 feature-hover cursor-default">
+                <div class="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center mb-4 border border-green-500/30">
+                    <i class="fas fa-terminal text-green-400 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">Terminal Integrado</h3>
+                <p class="text-gray-400 text-sm">Execute comandos, scripts e ferramentas sem sair do editor. Experiência unificada.</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 feature-hover cursor-default">
+                <div class="w-12 h-12 rounded-xl bg-yellow-500/20 flex items-center justify-center mb-4 border border-yellow-500/30">
+                    <i class="fas fa-palette text-yellow-400 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">Temas Personalizáveis</h3>
+                <p class="text-gray-400 text-sm">Dark mode elegante e suporte a temas customizados para sua preferência visual.</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 feature-hover cursor-default">
+                <div class="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center mb-4 border border-red-500/30">
+                    <i class="fas fa-plug text-red-400 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">Extensibilidade</h3>
+                <p class="text-gray-400 text-sm">API poderosa para criar plugins e extender funcionalidades sob demanda.</p>
+            </div>
+            <div class="glass-card rounded-2xl p-6 feature-hover cursor-default">
+                <div class="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center mb-4 border border-indigo-500/30">
+                    <i class="fas fa-code-branch text-indigo-400 text-xl"></i>
+                </div>
+                <h3 class="text-xl font-semibold mb-2">Git Nativo</h3>
+                <p class="text-gray-400 text-sm">Controle de versão integrado com interface visual para commits, branches e merges.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section id="tech" class="max-w-7xl mx-auto px-6 py-20">
+        <div class="glass-card rounded-2xl p-10 border border-white/10">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold mb-3">Tecnologias que <span class="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Potencializam</span></h2>
+                <p class="text-gray-400">Built with modern tools for modern developers</p>
+            </div>
+            <div class="flex flex-wrap justify-center gap-6 text-center">
+                <div><i class="fab fa-react text-4xl text-cyan-400"></i><p class="text-xs mt-1 text-gray-500">React</p></div>
+                <div><i class="fab fa-js text-4xl text-yellow-400"></i><p class="text-xs mt-1 text-gray-500">TypeScript</p></div>
+                <div><i class="fab fa-python text-4xl text-blue-400"></i><p class="text-xs mt-1 text-gray-500">FastAPI</p></div>
+                <div><i class="fas fa-database text-4xl text-green-400"></i><p class="text-xs mt-1 text-gray-500">PostgreSQL</p></div>
+                <div><i class="fab fa-docker text-4xl text-blue-500"></i><p class="text-xs mt-1 text-gray-500">Docker</p></div>
+                <div><i class="fas fa-microchip text-4xl text-purple-400"></i><p class="text-xs mt-1 text-gray-500">Ollama</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Sobre -->
+    <section id="about" class="max-w-7xl mx-auto px-6 py-20">
+        <div class="grid md:grid-cols-2 gap-12 items-center">
+            <div>
+                <h2 class="text-4xl font-bold mb-4">Um editor feito <span class="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">para você</span></h2>
+                <p class="text-gray-400 leading-relaxed">
+                    Ezekiel Editor nasceu da necessidade de um ambiente de desenvolvimento completo, com inteligência artificial local, seguro e extremamente personalizável. Totalmente open source, construído pela comunidade para a comunidade. Nosso objetivo é proporcionar a melhor experiência de desenvolvimento sem comprometer privacidade ou performance.
+                </p>
+                <div class="mt-8 flex gap-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-star text-yellow-500"></i>
+                        <span>100% Open Source</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-lock text-green-500"></i>
+                        <span>Privacidade First</span>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-card rounded-2xl p-6 text-center">
+                <i class="fas fa-quote-left text-3xl text-purple-500 mb-4"></i>
+                <p class="text-gray-300 italic">"O Ezekiel Editor redefiniu minha forma de codar. A IA local é um divisor de águas."</p>
+                <p class="text-sm text-gray-500 mt-4">— Desenvolvedor Full Stack</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="max-w-7xl mx-auto px-6 py-20 text-center">
+        <div class="glass-card rounded-3xl p-12 border border-white/10">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">Pronto para <span class="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">elevar seu código</span>?</h2>
+            <p class="text-gray-400 max-w-xl mx-auto mb-8">Junte-se à revolução da programação com IA local.</p>
+            <button class="px-8 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:scale-105 transition shadow-lg font-medium">
+                <i class="fab fa-github mr-2"></i>Contribuir no GitHub
+            </button>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/10 py-8 text-center text-gray-500 text-sm">
+        <p>© 2025 Ezekiel Editor. Feito com <i class="fas fa-heart text-red-500"></i> para a comunidade open source.</p>
+    </footer>
+</body>
+</html>

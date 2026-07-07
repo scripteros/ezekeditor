@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-type SidebarView = 'explorer' | 'search' | 'git' | 'extensions' | 'ldap' | 'backlog' | 'settings' | 'games' | 'winproc' | null
+type SidebarView = 'explorer' | 'search' | 'git' | 'extensions' | 'ldap' | 'backlog' | 'settings' | 'games' | 'winproc' | 'extbuilder' | null
 
 export type BottomTab = 'terminal' | 'logs' | 'sql' | 'security'
 

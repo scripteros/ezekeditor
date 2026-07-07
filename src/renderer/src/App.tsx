@@ -12,6 +12,7 @@ import LoginScreen from './components/auth/LoginScreen'
 import UpdateNotification from './components/UpdateNotification'
 import GameScrapPanel from './components/gamescrap/GameScrapPanel'
 import WinProcessPanel from './components/winproc/WinProcessPanel'
+import ExtensionBuilderPanel from './components/extbuilder/ExtensionBuilderPanel'
 import { useThemeStore } from './store/themeStore'
 import { useCommandPaletteStore } from './store/commandPaletteStore'
 import { useSidebarStore } from './store/sidebarStore'
@@ -26,9 +27,10 @@ export default function App() {
   const user = useAuthStore(s => s.user)
   const updateOnlineUsers = useAuthStore(s => s.updateOnlineUsers)
   const initAuth = useAuthStore(s => s.initAuth)
-  const shouldShowSidebar = isSidebarOpen && activeView !== 'extensions' && activeView !== 'backlog' && activeView !== 'games' && activeView !== 'winproc'
+  const shouldShowSidebar = isSidebarOpen && activeView !== 'extensions' && activeView !== 'backlog' && activeView !== 'games' && activeView !== 'winproc' && activeView !== 'extbuilder'
   const isGamesMode = activeView === 'games'
   const isWinProc = activeView === 'winproc'
+  const isExtBuilder = activeView === 'extbuilder'
 
   useEffect(() => {
     document.documentElement.className = theme.type
@@ -85,6 +87,8 @@ export default function App() {
             <GameScrapPanel />
           ) : isWinProc ? (
             <WinProcessPanel />
+          ) : isExtBuilder ? (
+            <ExtensionBuilderPanel />
           ) : (
             <>
               <EditorPanel />

@@ -66,6 +66,11 @@ export const IPC_CHANNELS = {
   SECURITY_INTERCEPT_DISABLE: 'security:intercept:disable',
   SECURITY_INTERCEPT_PENDING: 'security:intercept:pending',
   SECURITY_INTERCEPT_ACTION: 'security:intercept:action',
+
+  // Extension Builder
+  EXTBUILDER_GENERATE_EXTENSION: 'extbuilder:generate-extension',
+  EXTBUILDER_OPEN_FOLDER: 'extbuilder:open-folder',
+  EXTBUILDER_SAVE_EXTENSION: 'extbuilder:save-extension',
   
   // LDAP
   LDAP_CONNECT: 'ldap:connect',

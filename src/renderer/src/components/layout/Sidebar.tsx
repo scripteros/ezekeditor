@@ -5,7 +5,7 @@ import GitPanel from '../git/GitPanel'
 import AIExtensionsPanel from '../extensions/AIExtensionsPanel'
 import LdapPanel from '../ldap/LdapPanel'
 import SettingsSidebar from '../settings/SettingsSidebar'
-import { Monitor } from 'lucide-react'
+import { Monitor, Puzzle } from 'lucide-react'
 
 export default function Sidebar() {
   const { isOpen, activeView, width, setActiveView } = useSidebarStore()
@@ -49,6 +49,14 @@ export default function Sidebar() {
             >
               <Monitor size={14} className="text-cyan-400" />
               <span>Windows Process Inspector</span>
+              <span className="ml-auto text-[8px] text-nova-text-muted opacity-50">Abrir</span>
+            </button>
+            <button
+              onClick={() => setActiveView('extbuilder')}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded text-[10px] text-nova-text-muted hover:bg-nova-hover hover:text-orange-400 transition-colors"
+            >
+              <Puzzle size={14} className="text-orange-400" />
+              <span>Extension Builder</span>
               <span className="ml-auto text-[8px] text-nova-text-muted opacity-50">Abrir</span>
             </button>
           </div>

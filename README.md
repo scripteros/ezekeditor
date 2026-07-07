@@ -27,7 +27,9 @@ Ezek Editor é um editor desktop moderno inspirado no VS Code, construído com E
 - Memória Redis compartilhada com IA/chat e histórico SQL, com expiração automática de 7 dias.
 - Painel de configurações para aparência, editor, terminal, atalhos, sincronização e segurança.
 - Painel de extensões/marketplace para recursos de IA.
-- Painel de segurança/proxy e navegador auxiliar para análise de tráfego.
+- Painel de segurança/proxy com navegador, interceptador, pentest e dump de memória de website com análise por IA.
+- **Extension Builder**: crie extensões Chrome analisando páginas, modificando elementos em tempo real e gerando extensões com IA.
+- **Windows Process Inspector**: inspecione processos, janelas, memória e UI Automation do Windows.
 - Gerenciador LDAP para conexões Active Directory/LDAP.
 
 ## Editor de código
@@ -150,15 +152,48 @@ O painel de configurações concentra ajustes de:
 
 As preferências visuais são persistidas localmente via `localStorage`.
 
-## Segurança e LDAP
+## Segurança
 
-A aplicação inclui painéis dedicados para:
+O painel de segurança (Security Lab) oferece um conjunto completo de ferramentas para análise e pentest:
 
-- Segurança/proxy, com captura e análise de tráfego.
-- Navegação auxiliar com proxy local.
-- LDAP/Active Directory para conexão e listagem de usuários.
+- Navegador de segurança integrado com proxy local.
+- **Dump de Memória de Website**: captura o estado completo de um site carregado — DOM, variáveis JavaScript globais, localStorage, sessionStorage, campos hidden, strings codificadas (Base64/JWT) — e permite análise automática com IA para identificar tokens, chaves e dados sensíveis expostos.
+- Interceptador de tráfego HTTP/HTTPS.
+- Scanner de vulnerabilidades (PenTest Engine) com varreduras completas.
+- Auditor de segurança com relatórios.
+- Mapa do site e histórico de navegação.
+- Modo Hacker com chat especializado para pentest.
 
-Esses módulos ficam disponíveis pela barra lateral.
+## Extension Builder
+
+Um módulo completo para criar extensões Chrome diretamente no Ezek:
+
+- Navegador integrado para carregar qualquer site.
+- **Análise de elementos**: escaneia a página e lista todos os elementos interativos (botões, inputs, links, imagens, formulários) com seletores CSS.
+- **Modificações visuais em tempo real**: insira, modifique, remova ou estilize elementos diretamente na página carregada com preview instantâneo.
+- Editor de código JavaScript integrado para cada modificação.
+- **Assistente IA**: descreva o que quer fazer ("adicione um botão flutuante de dark mode") e a IA gera o código automaticamente.
+- **Geração de extensão Chrome**: cria automaticamente `manifest.json` (Manifest V3) e `content.js` com todas as modificações, empacota em `.zip` e salva em pasta.
+- Compatível com instalação direta em `chrome://extensions` via "Carregar sem compactação".
+
+## Windows Process Inspector
+
+Módulo para inspeção de processos e janelas Windows em tempo real:
+
+- Lista todos os processos com janelas abertas no sistema.
+- Lista janelas visíveis com classes, dimensões e títulos.
+- **Dump de memória**: captura strings da memória de qualquer processo.
+- Leitura de regiões de memória com visualização em hex dump.
+- Inspeção de árvore de UI Automation de qualquer janela.
+- Injeção de JavaScript em webviews para debug.
+
+## LDAP / Active Directory
+
+Conexão e gerenciamento de diretórios LDAP/AD:
+
+- Conexão com servidores LDAP/Active Directory.
+- Listagem e busca de usuários.
+- Visualização de atributos e grupos.
 
 ## Dados persistidos localmente
 

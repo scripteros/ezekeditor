@@ -13,6 +13,7 @@ import { registerLocalConfigHandlers } from './localConfig'
 import { registerAutoUpdateHandlers } from '../services/autoUpdater'
 import { registerOnlineUsersHandlers, unregisterOnlineUsers } from '../services/onlineUsers'
 import { registerWinProcHandlers, setWinProcOwnerWindow } from './winproc'
+import { registerExtensionBuilderHandlers } from './extensionBuilder'
 import { watchDirectory, unwatchDirectory } from '../services/watcherService'
 import { execSync, exec } from 'child_process'
 
@@ -30,6 +31,7 @@ export function registerAllIpcHandlers(): void {
   registerAutoUpdateHandlers()
   registerOnlineUsersHandlers()
   registerWinProcHandlers()
+  registerExtensionBuilderHandlers()
 
   ipcMain.handle(IPC_CHANNELS.WATCH_DIRECTORY, (_event, dirPath: string) => {
     watchDirectory(dirPath)

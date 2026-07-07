@@ -396,6 +396,16 @@ const api = {
 
   winprocInjectJSToWebview: (jsCode: string) =>
     ipcRenderer.invoke('winproc:inject-js-to-webview', jsCode) as Promise<{ success: boolean; result?: any; error?: string }>,
+
+  // Extension Builder
+  extbuilderGenerateExtension: (data: { name: string; description: string; targetUrl: string; contentScript: string; modifications: Array<{ type: string; selector: string; description: string; code: string }> }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.EXTBUILDER_GENERATE_EXTENSION, data) as Promise<{ success: boolean; folderPath?: string; zipPath?: string | null; manifest?: any; files?: string[]; error?: string }>,
+
+  extbuilderOpenFolder: (folderPath: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.EXTBUILDER_OPEN_FOLDER, folderPath) as Promise<{ success: boolean; error?: string }>,
+
+  extbuilderSaveExtension: (data: { name: string; description: string; targetUrl: string; contentScript: string; modifications: Array<{ type: string; selector: string; description: string; code: string }> }) =>
+    ipcRenderer.invoke(IPC_CHANNELS.EXTBUILDER_SAVE_EXTENSION, data) as Promise<{ success: boolean; folderPath?: string; error?: string }>,
 }
 
 

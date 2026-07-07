@@ -1,4 +1,4 @@
-import { Files, Search, GitFork, Sun, Moon, Store, Network, Settings, ListTodo, Gamepad2, Monitor } from 'lucide-react'
+import { Files, Search, GitFork, Sun, Moon, Store, Network, Settings, ListTodo, Gamepad2, Monitor, Puzzle } from 'lucide-react'
 import { useSidebarStore } from '../../store/sidebarStore'
 import { useThemeStore } from '../../store/themeStore'
 import { useGitStore } from '../../store/gitStore'
@@ -100,6 +100,20 @@ export default function ActivityBar() {
             <div className="absolute left-0 w-[2px] h-5 bg-cyan-400 rounded-r-full" />
           )}
           <Monitor size={20} />
+        </button>
+        <button
+          title="Extension Builder"
+          onClick={() => setActiveView('extbuilder')}
+          className={`w-10 h-10 flex items-center justify-center rounded transition-all relative ${
+            activeView === 'extbuilder'
+              ? 'text-orange-400 bg-nova-hover'
+              : 'text-nova-text-muted hover:text-nova-text hover:bg-nova-hover'
+          }`}
+        >
+          {activeView === 'extbuilder' && (
+            <div className="absolute left-0 w-[2px] h-5 bg-orange-400 rounded-r-full" />
+          )}
+          <Puzzle size={20} />
         </button>
         <button
           title="Configurações"
